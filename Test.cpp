@@ -1,21 +1,34 @@
 #include "MemoryPool.h"
 
+#ifdef WIN32
+#include <windows.h>
+#endif
+
 #include <assert.h>
 #include <memory>
 
+size_t g_pageSize;
+
 bool Test_1()
 {
-    mem::MemoryPool pool;
+    mem::MemoryPool pool(g_pageSize);
 
     {
         void* a = pool.allocMemory(sizeof(int));
         assert(a != nullptr);
-        int* b = reinterpret_cast<int*>(a);
-        *b = 10;
+        int* c = reinterpret_cast<int*>(a);
+        *c = 10;
+
+        void* b = pool.allocMemory(sizeof(int));
+        assert(b != nullptr);
+        int* d = reinterpret_cast<int*>(b);
+        *d = 11;
         assert(*(int*)a == 10);
+        assert(*(int*)b == 11);
 
         pool.freeMemory(a);
-        assert(a != nullptr);
+        pool.freeMemory(b);
+        assert(true);
     }
 
 
@@ -65,6 +78,13 @@ bool Test_2()
 
 int main()
 {
+#ifdef WIN32
+    SYSTEM_INFO systemInfo;
+    memset(&systemInfo, 0, sizeof(SYSTEM_INFO));
+    ::GetSystemInfo(&systemInfo);
+
+    g_pageSize = systemInfo.dwPageSize;
+#endif
     assert(Test_1());
     assert(Test_2());
 
