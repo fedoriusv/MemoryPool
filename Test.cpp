@@ -21,7 +21,7 @@ size_t g_pageSize;
 
 bool Test_1()
 {
-    mem::MemoryPool<false, true> pool(g_pageSize);
+    mem::MemoryPool pool(g_pageSize);
 
     {
         void* a = pool.allocMemory(sizeof(int));
@@ -99,11 +99,136 @@ bool Test_1()
 
 bool Test_2()
 {
+    mem::MemoryPool pool(g_pageSize);
+
+    for (int i = 0; i < 2; ++i)
+    {
+        int koef = (i * 10) + 1;
+        {
+            void* a = pool.allocMemory(30 * koef);
+            assert(a != nullptr);
+            memset(a, 'a', 30 * koef);
+
+            void* b = pool.allocMemory(40 * koef);
+            assert(b != nullptr);
+            memset(b, 'b', 40 * koef);
+
+            void* c = pool.allocMemory(50 * koef);
+            assert(c != nullptr);
+            memset(c, 'c', 50 * koef);
+
+            void* d = pool.allocMemory(60 * koef);
+            assert(d != nullptr);
+            memset(d, 'd', 60 * koef);
+
+            {
+                char* ca = (char*)a;
+                for (int i = 0; i < 30 * koef; ++i)
+                {
+                    if (ca[i] != 'a')
+                    {
+                        assert(false);
+                        return false;
+                    }
+                }
+
+                char* cb = (char*)b;
+                for (int i = 0; i < 40 * koef; ++i)
+                {
+                    if (cb[i] != 'b')
+                    {
+                        assert(false);
+                        return false;
+                    }
+                }
+
+                char* cc = (char*)c;
+                for (int i = 0; i < 50 * koef; ++i)
+                {
+                    if (cc[i] != 'c')
+                    {
+                        assert(false);
+                        return false;
+                    }
+                }
+            }
+
+            char* cd = (char*)d;
+            for (int i = 0; i < 60 * koef; ++i)
+            {
+                if (cd[i] != 'd')
+                {
+                    assert(false);
+                    return false;
+                }
+            }
+
+            pool.freeMemory(b);
+            b = nullptr;
+            pool.freeMemory(c);
+            c = nullptr;
+
+            void* e = pool.allocMemory(80 * koef);
+            assert(e != nullptr);
+            memset(e, 'e', 80 * koef);
+
+            void* f = pool.allocMemory(80 * koef);
+            assert(f != nullptr);
+            memset(f, 'f', 80 * koef);
+
+            {
+                char* cd = (char*)d;
+                for (int i = 0; i < 60 * koef; ++i)
+                {
+                    if (cd[i] != 'd')
+                    {
+                        assert(false);
+                        return false;
+                    }
+                }
+
+                char* ce = (char*)e;
+                for (int i = 0; i < 80 * koef; ++i)
+                {
+                    if (ce[i] != 'e')
+                    {
+                        assert(false);
+                        return false;
+                    }
+                }
+
+                char* cf = (char*)f;
+                for (int i = 0; i < 80 * koef; ++i)
+                {
+                    if (cf[i] != 'f')
+                    {
+                        assert(false);
+                        return false;
+                    }
+                }
+            }
+
+            std::cout << "After Create" << std::endl;
+            pool.collectStatistic();
+        }
+    }
+        std::cout << "After Destroy" << std::endl;
+        pool.collectStatistic();
+        assert(true);
+
+    std::cout << "After Destroy All" << std::endl;
+    pool.collectStatistic();
+
+    return true;
+}
+
+bool Test_3()
+{
     mem::u64 allocateTime = 0;
     mem::u64 dealocateTime = 0;
 
     //large pools
-    mem::MemoryPool<false, true> pool(g_pageSize);
+    mem::MemoryPool pool(g_pageSize);
 
     const int maxMallocSize = 10 * 1024 * 1024;
 
@@ -170,7 +295,7 @@ bool Test_2()
     return true;
 }
 
-bool Test_3()
+bool Test_4()
 {
     //small allocation
     /*mem::MemoryPool pool({ g_pageSize, true, false });
@@ -231,11 +356,12 @@ int main()
     memset(&systemInfo, 0, sizeof(SYSTEM_INFO));
     ::GetSystemInfo(&systemInfo);
 
-    g_pageSize = systemInfo.dwPageSize;
+    g_pageSize = systemInfo.dwAllocationGranularity;
 #endif
-    TEST(Test_1());
+    //TEST(Test_1());
     TEST(Test_2());
     TEST(Test_3());
+    TEST(Test_4());
 
     return 0;
 }
