@@ -2,11 +2,12 @@
 
 #include <assert.h>
 #include <vector>
+#include <array>
 #include <list>
 #include <map>
 
 #define DEBUG_MEMORY 0
-#define ENABLE_STATISTIC 1
+#define ENABLE_STATISTIC 0
 
 #ifdef new
 #   undef new
@@ -23,6 +24,7 @@ namespace mem
     typedef signed long long    s64;
     typedef unsigned int        u32;
     typedef signed int          s32;
+    typedef unsigned short      u16;
     typedef void*               address_ptr;
 
     /*
@@ -96,9 +98,9 @@ namespace mem
         */
         static MemoryAllocator* getDefaultMemoryAllocator();
 
-#if ENABLE_STATISTIC
+//#if ENABLE_STATISTIC
         void collectStatistic();
-#endif //ENABLE_STATISTIC
+//#endif //ENABLE_STATISTIC
 
     private:
 
@@ -179,7 +181,7 @@ namespace mem
                 _size = 0;
             }
 
-            void insert(Block* block)
+            void priorityInsert(Block* block)
             {
                 Block* current = begin();
                 while (current != end())
@@ -196,6 +198,14 @@ namespace mem
                     current = current->_next;
                 }
 
+                link(_end->_prev, block);
+                link(block, _end);
+
+                ++_size;
+            }
+
+            void insert(Block* block)
+            {
                 link(_end->_prev, block);
                 link(block, _end);
 
@@ -256,6 +266,9 @@ namespace mem
 
         struct Pool
         {
+            Pool() = delete;
+            Pool(const Pool&) = delete;
+
             Pool(PoolTable const* table, u64 size) noexcept
                 : _table(table)
                 , _size(size)
@@ -301,8 +314,9 @@ namespace mem
             Type             _type;
         };
 
+        static const u64        k_maxSmallTableAllocation = 32768;
+        std::array<u16, (k_maxSmallTableAllocation >> 2)> m_smallTableIndex;
         std::vector<PoolTable>  m_smallPoolTables;
-        u64                     m_maxSmallTableAllocation;
 
         PoolTable               m_poolTable;
         //best size 65KB
@@ -312,11 +326,10 @@ namespace mem
 
         static MemoryAllocator* s_defaultMemoryAllocator;
 
-        Pool*   allocatePool(PoolTable* table, u64 tableSize, u64 size, u32 align);
+        Pool*   allocateFixedBlocksPool(PoolTable* table, u32 align);
         void    deallocatePool(Pool* pool);
 
         Block* initBlock(address_ptr ptr, Pool* pool, u64 size);
-
 
 #if ENABLE_STATISTIC
         struct Statistic
