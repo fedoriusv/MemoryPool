@@ -7,7 +7,7 @@
 #include <map>
 
 #define DEBUG_MEMORY 0
-#define ENABLE_STATISTIC 0
+#define ENABLE_STATISTIC 1
 
 #ifdef new
 #   undef new
@@ -137,7 +137,7 @@ namespace mem
 #if DEBUG_MEMORY
             address_ptr _ptr;
 #endif //DEBUG_MEMORY
-            address_ptr ptr()
+            inline address_ptr ptr()
             {
                 u64 offset = sizeof(Block);
                 address_ptr ptr = (address_ptr)(reinterpret_cast<u64>(this) + offset);
@@ -150,19 +150,28 @@ namespace mem
         {
         public:
 
-            BlockList()
+            BlockList() noexcept
                 : _end(nullptr)
                 , _size(0)
             {
                 clear();
             }
 
-            Block* begin()
+            ~BlockList()
+            {
+                if (_end)
+                {
+                    delete _end;
+                    _end = nullptr;
+                }
+            }
+
+            inline Block* begin()
             {
                 return _end->_next;
             }
 
-            Block* end()
+            inline Block* end()
             {
                 return _end;
             }
@@ -204,7 +213,7 @@ namespace mem
                 ++_size;
             }
 
-            void insert(Block* block)
+            inline void insert(Block* block)
             {
                 link(_end->_prev, block);
                 link(block, _end);
@@ -247,14 +256,14 @@ namespace mem
                 return block->_next;
             }
 
-            bool empty()
+            inline bool empty() const
             {
                 return _end == _end->_next;
             }
 
         private:
 
-            void link(Block* l, Block* r)
+            inline void link(Block* l, Block* r)
             {
                 l->_next = r;
                 r->_prev = l;
@@ -269,23 +278,27 @@ namespace mem
             Pool() = delete;
             Pool(const Pool&) = delete;
 
-            Pool(PoolTable const* table, u64 size) noexcept
+            Pool(PoolTable const* table, u64 blockSize, address_ptr memory, u64 poolSize) noexcept
                 : _table(table)
-                , _size(size)
+                , _memory(memory)
+                , _blockSize(blockSize)
+                , _poolSize(poolSize)
             {
                 _used.clear();
                 _free.clear();
             }
 
             PoolTable const*    _table;
-            const u64           _size;
+            address_ptr         _memory;
+            const u64           _blockSize;
+            const u64           _poolSize;
             BlockList           _used;
             BlockList           _free;
         };
 
         struct PoolTable
         {
-            enum Type
+            enum Type : u32
             {
                 Default = 0,
                 SmallTable,
@@ -298,20 +311,14 @@ namespace mem
             }
 
             PoolTable(u64 size, PoolTable::Type type) noexcept
-                : _size(0)
-                , _type(type)
+                : _size(size)
+                , _type(Type::Default)
             {
-            }
-
-            void init(u64 size)
-            {
-                assert(_pools.empty());
-                _size = size; 
             }
 
             u64              _size;
-            std::list<Pool*> _pools;
             Type             _type;
+            std::list<Pool*> _pools;
         };
 
         static const u64        k_maxSmallTableAllocation = 32768;
@@ -325,6 +332,8 @@ namespace mem
         BlockList               m_largeAllocations;
 
         static MemoryAllocator* s_defaultMemoryAllocator;
+
+        std::vector<Pool*>      m_markedToDelete;
 
         Pool*   allocateFixedBlocksPool(PoolTable* table, u32 align);
         void    deallocatePool(Pool* pool);

@@ -21,7 +21,7 @@ size_t g_pageSize;
 
 bool Test_0()
 {
-    std::cout << "-----------------Test_0 (Small Allocation)-----------------" << std::endl;
+    std::cout << "-----------------Test_0 (Small Allocation. Compare)-----------------" << std::endl;
 
     //create seq 32k allcation increase size, after that randomly delete it
     std::vector<std::pair<void*, int>> mem(32'000);
@@ -99,7 +99,7 @@ bool Test_0()
 
 bool Test_1()
 {
-    std::cout << "----------------Test_1-----------------" << std::endl;
+    std::cout << "----------------Test_1 (Small Allocation. Base)-----------------" << std::endl;
 
     mem::MemoryPool pool(g_pageSize);
 
@@ -180,7 +180,7 @@ bool Test_1()
 
 bool Test_2()
 {
-    std::cout << "----------------Test_2-----------------" << std::endl;
+    std::cout << "----------------Test_2 (Small Allocation. 2 alloc many times)-----------------" << std::endl;
 
     const int countIter = 100'000;
     {
@@ -241,7 +241,7 @@ bool Test_2()
 
 bool Test_3()
 {
-    std::cout << "----------------Test_3-----------------" << std::endl;
+    std::cout << "----------------Test_3 (Small Allocation. Check content)-----------------" << std::endl;
 
     mem::MemoryPool pool(g_pageSize);
 
@@ -369,7 +369,40 @@ bool Test_3()
 
 bool Test_4()
 {
-    std::cout << "----------------Test_4-----------------" << std::endl;
+    std::cout << "----------------Test_4 (Medium allocation)-----------------" << std::endl;
+    std::cout << "----------------Test_4 END-----------------" << std::endl;
+    return true;
+}
+
+bool Test_5()
+{
+    std::cout << "----------------Test_5 (Medium allocation)-----------------" << std::endl;
+    std::cout << "----------------Test_5 END-----------------" << std::endl;
+    return true;
+}
+
+bool Test_6()
+{
+    std::cout << "----------------Test_6 (Medium allocation)-----------------" << std::endl;
+    std::cout << "----------------Test_6 END-----------------" << std::endl;
+    return true;
+}
+
+bool Test_7()
+{
+    std::cout << "----------------Test_7 (Large allocation)-----------------" << std::endl;
+
+    //TODO
+
+    std::cout << "----------------Test_7 END-----------------" << std::endl;
+    return true;
+}
+
+
+
+bool Test_8()
+{
+    std::cout << "----------------Test_8 (Combine allocation)-----------------" << std::endl;
 
     mem::u64 allocateTime = 0;
     mem::u64 deallocateTime = 0;
@@ -439,11 +472,11 @@ bool Test_4()
 
     std::cout << "STD malloc: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
 
-    std::cout << "----------------Test_4 END-----------------" << std::endl;
+    std::cout << "----------------Test_8 END-----------------" << std::endl;
     return true;
 }
 
-bool Test_5()
+bool Test_9()
 {
     //small allocation
     /*mem::MemoryPool pool({ g_pageSize, true, false });
@@ -509,9 +542,12 @@ int main()
     TEST(Test_0());
     TEST(Test_1());
     TEST(Test_2());
-    //TEST(Test_3());
-    //TEST(Test_4());
-    //TEST(Test_5());
+    TEST(Test_3());
+    TEST(Test_4());
+    TEST(Test_5());
+    TEST(Test_6());
+    TEST(Test_7());
+    //TEST(Test_8());
 
     return 0;
 }
