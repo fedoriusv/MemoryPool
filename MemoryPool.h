@@ -67,6 +67,7 @@ namespace mem
         /*
         * Request free memory from pool
         * param size: count bytes will be requested
+        * param aligment: aligment
         */
         address_ptr allocMemory(u64 size, u32 aligment = 0);
 
@@ -321,8 +322,8 @@ namespace mem
             std::list<Pool*> _pools;
         };
 
-        static const u64        k_maxSmallTableAllocation = 32768;
-        std::array<u16, (k_maxSmallTableAllocation >> 2)> m_smallTableIndex;
+        static const u64        k_maxSizeSmallTableAllocation = 32'768;
+        std::array<u16, (k_maxSizeSmallTableAllocation >> 2)> m_smallTableIndex;
         std::vector<PoolTable>  m_smallPoolTables;
 
         PoolTable               m_poolTable;

@@ -392,12 +392,41 @@ bool Test_7()
 {
     std::cout << "----------------Test_7 (Large allocation)-----------------" << std::endl;
 
-    //TODO
+    mem::MemoryPool pool(g_pageSize);
+    const size_t minMallocSize = g_pageSize;
+    const size_t maxMallocSize = 1024 * 1024 * 512;  //512 MB
 
+    std::vector<std::pair<void*, int>> mem(10);
+    {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> dis(minMallocSize, maxMallocSize);
+
+        for (int i = 0; i < mem.size(); ++i)
+        {
+            int sz = dis(gen);
+            void* ptr = pool.allocMemory(sz);
+            mem[i] = std::make_pair(ptr, sz);
+            assert(mem[i].first != nullptr);
+        }
+        pool.collectStatistic();
+    }
+
+    {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::shuffle(mem.begin(), mem.end(), gen);
+
+        for (int i = 0; i < mem.size(); ++i)
+        {
+            assert(mem[i].first != nullptr);
+            pool.freeMemory(mem[i].first);
+        }
+        pool.collectStatistic();
+    }
     std::cout << "----------------Test_7 END-----------------" << std::endl;
     return true;
 }
-
 
 
 bool Test_8()

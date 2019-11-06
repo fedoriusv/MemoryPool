@@ -41,13 +41,13 @@ namespace mem
         , k_maxSizeTableAllocation(pageSize)
     {
 
-        assert(k_maxSizeTableAllocation >= 65536);
+        assert(k_maxSizeTableAllocation >= 65'536);
         m_smallTableIndex.fill(0);
         m_smallPoolTables.resize(s_smalBlockTableSizes.size(), {});
 
         u32 blockIndex = 0;
         auto blockIter = s_smalBlockTableSizes.cbegin();
-        for (u32 i = 0; i < (k_maxSmallTableAllocation >> 2); ++i)
+        for (u32 i = 0; i < (k_maxSizeSmallTableAllocation >> 2); ++i)
         {
             u64 blockSize = (u64)((i + 1U) << 2U);
             while (blockIter != s_smalBlockTableSizes.cend() && *blockIter < blockSize)
@@ -90,7 +90,7 @@ namespace mem
         //aligment = std::clamp<u32>(aligment, MIN_ALIGMENT, MAX_ALIGMENT);
 
         u32 aligmentedSize = alignUp<u32>(static_cast<u32>(size), aligment);
-        if (aligmentedSize <= k_maxSmallTableAllocation && aligment == DEFAULT_ALIGMENT)
+        if (aligmentedSize <= k_maxSizeSmallTableAllocation && aligment == DEFAULT_ALIGMENT)
         {
             //small allocations
             u32 index = (aligmentedSize >> 2) - 1;
@@ -171,14 +171,13 @@ namespace mem
                             pool->_free.erase(block);
                             pool->_used.priorityInsert(block);
 
+                            address_ptr ptr = block->ptr();
 #if ENABLE_STATISTIC
                             auto endTime = std::chrono::high_resolution_clock::now();
                             m_statistic._allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
 
                             m_statistic.registerAllocation<1>(requestedSize);
 #endif //ENABLE_STATISTIC
-
-                            address_ptr ptr = block->ptr();
                             return ptr;
                         }
                         block = block->_next;
@@ -187,7 +186,7 @@ namespace mem
             }
 
             //create new pool
-            u64 allocationSize = alignUp<u64>(k_maxSizeTableAllocation / (k_maxSmallTableAllocation + sizeof(Block)), aligment);
+            u64 allocationSize = alignUp<u64>(k_maxSizeTableAllocation / (k_maxSizeSmallTableAllocation + sizeof(Block)), aligment);
             address_ptr memory = m_allocator->allocate(allocationSize, aligment, m_userData);
             assert(memory);
 
