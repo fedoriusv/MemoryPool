@@ -39,7 +39,7 @@ namespace mem
         : m_allocator(allocator)
         , m_userData(user)
         , k_pageSize(pageSize)
-        , k_maxSizePoolAllocation(pageSize - sizeof(Block))
+        , k_maxSizePoolAllocation(pageSize)
     {
 
         assert(k_pageSize >= 65'536);
@@ -230,7 +230,7 @@ namespace mem
             m_statistic._allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
 
             m_statistic.registerAllocation<2>(allocationSize);
-            m_statistic.registerPoolAllcation<2>(allocationSize);
+            m_statistic.registerPoolAllocation<2>(allocationSize);
 #endif //ENABLE_STATISTIC
 
             address_ptr ptr = block->ptr();
@@ -292,7 +292,7 @@ namespace mem
                     for (auto& pool : m_markedToDelete)
                     {
 #if ENABLE_STATISTIC
-                        m_statistic.registerPoolDeallcation<0>(pool->_poolSize);
+                        m_statistic.registerPoolDeallocation<0>(pool->_poolSize);
 #endif //ENABLE_STATISTIC
                         MemoryPool::deallocatePool(pool);
                     }
@@ -323,7 +323,7 @@ namespace mem
             m_allocator->deallocate(ptr, blockSize, m_userData);
 #if ENABLE_STATISTIC
             m_statistic.registerDeallocation<2>(blockSize);
-            m_statistic.registerPoolDeallcation<2>(blockSize);
+            m_statistic.registerPoolDeallocation<2>(blockSize);
 #endif //ENABLE_STATISTIC
         }
 
@@ -335,9 +335,9 @@ namespace mem
 
     void MemoryPool::preAllocatePools()
     {
-        assert(table._pools.empty());
         for (auto& table : m_smallPoolTables)
         {
+            assert(table._pools.empty());
             Pool* pool = MemoryPool::allocateFixedBlocksPool(&table, DEFAULT_ALIGMENT);
             table._pools.push_back(pool);
         }
@@ -373,7 +373,7 @@ namespace mem
         Pool* pool = new(m_allocator->allocate(sizeof(Pool), align, m_userData)) Pool(table, table->_size, memory, allocatedSize);
 
 #if ENABLE_STATISTIC
-        m_statistic.registerPoolAllcation<0>(allocatedSize);
+        m_statistic.registerPoolAllocation<0>(allocatedSize);
 #endif //ENABLE_STATISTIC
 
         for (u32 i = 0; i < countAllocations; ++i)
@@ -395,7 +395,7 @@ namespace mem
 
         Pool* pool = new(m_allocator->allocate(sizeof(Pool), align, m_userData)) Pool(table, initBlockSize, memory, allocatedSize);
 #if ENABLE_STATISTIC
-        m_statistic.registerPoolAllcation<1>(allocatedSize);
+        m_statistic.registerPoolAllocation<1>(allocatedSize);
 #endif //ENABLE_STATISTIC
 
         return pool;
@@ -427,14 +427,14 @@ namespace mem
     {
 #if ENABLE_STATISTIC
         std::cout << "Pool Statistic" << std::endl;
-        std::cout << "Time alloc/dealloc (ms): " << (double)m_statistic._allocateTime / 1000.0 << "/" << (double)m_statistic._dealocateTime / 1000.0 << std::endl;
-        std::cout << "Count Allocation : " << m_statistic._generalAllocationCount << ". Size (b): " << m_statistic._generalAllocationSize << std::endl;
+        std::cout << "Time alloc/dealloc (ms): " << (f64)m_statistic._allocateTime / 1000.0 << "/" << (f64)m_statistic._dealocateTime / 1000.0 << std::endl;
+        std::cout << "Count Allocation : " << m_statistic._generalAllocationCount << ". Size (byte): " << m_statistic._generalAllocationSize << std::endl;
         std::cout << "Pool Staticstic:" << std::endl;
-        std::cout << " SmallTable - Sizes/PoolSizes (b): " << m_statistic._tableAllocationSizes[0] << "/" << m_statistic._poolAllocationSizes[0] 
+        std::cout << " SmallTable - Sizes/PoolSizes (byte): " << m_statistic._tableAllocationSizes[0] << "/" << m_statistic._poolAllocationSizes[0] 
             << " Count Allcations/Pools: " << m_statistic._tableAllocationCount[0] << "/" << m_statistic._poolsAllocationCount[0] << std::endl;
-        std::cout << " PoolTable - Sizes/PoolSizes (b): " << m_statistic._tableAllocationSizes[1] << "/" << m_statistic._poolAllocationSizes[1]
+        std::cout << " PoolTable - Sizes/PoolSizes (byte): " << m_statistic._tableAllocationSizes[1] << "/" << m_statistic._poolAllocationSizes[1]
             << " Count Allcations/Pools: " << m_statistic._tableAllocationCount[1] << "/" << m_statistic._poolsAllocationCount[1] << std::endl;
-        std::cout << " LargeAllocations - Sizes/PoolSizes (b): " << m_statistic._tableAllocationSizes[2] << "/" << m_statistic._poolAllocationSizes[2]
+        std::cout << " LargeAllocations - Sizes/PoolSizes (byte): " << m_statistic._tableAllocationSizes[2] << "/" << m_statistic._poolAllocationSizes[2]
             << " Count Allcations/Pools: " << m_statistic._tableAllocationCount[2] << "/" << m_statistic._poolsAllocationCount[2] << std::endl;
 #endif //ENABLE_STATISTIC
     }

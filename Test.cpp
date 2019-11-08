@@ -24,7 +24,7 @@ bool Test_0()
     std::cout << "-----------------Test_0 (Small Allocation. Compare)-----------------" << std::endl;
 
     //create seq 32k allcation increase size, after that randomly delete it
-    std::vector<std::pair<void*, size_t>> mem(32'000);
+    std::vector<std::pair<void*, size_t>> mem(32'768);
     {
         mem::MemoryPool pool(g_pageSize);
         pool.preAllocatePools();

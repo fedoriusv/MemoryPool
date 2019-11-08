@@ -20,11 +20,12 @@
 
 namespace mem
 {
-    typedef unsigned long long  u64;
-    typedef signed long long    s64;
-    typedef unsigned int        u32;
-    typedef signed int          s32;
     typedef unsigned short      u16;
+    typedef signed int          s32;
+    typedef unsigned int        u32;
+    typedef signed long long    s64;
+    typedef unsigned long long  u64;
+    typedef double              f64;
     typedef void*               address_ptr;
 
     /*
@@ -316,7 +317,7 @@ namespace mem
 
         static const u64 k_countPagesPerAllocation = 16;
 
-        static const u64 k_maxSizeSmallTableAllocation = (32'768 - sizeof(Block));
+        static const u64 k_maxSizeSmallTableAllocation = 32'768;
         std::array<u16, (k_maxSizeSmallTableAllocation >> 2)> m_smallTableIndex;
         std::vector<PoolTable>  m_smallPoolTables;
 
@@ -391,7 +392,7 @@ namespace mem
             }
 
             template<u32 type>
-            void registerPoolAllcation(u64 size)
+            void registerPoolAllocation(u64 size)
             {
                 static_assert(type < 3);
                 ++_poolsAllocationCount[type];
@@ -400,7 +401,7 @@ namespace mem
             }
 
             template<u32 type>
-            void registerPoolDeallcation(u64 size)
+            void registerPoolDeallocation(u64 size)
             {
                 static_assert(type < 3);
                 --_poolsAllocationCount[type];
