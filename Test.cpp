@@ -512,34 +512,90 @@ bool Test_7()
     const size_t minMallocSize = g_pageSize;
     const size_t maxMallocSize = 1024 * 1024 * 512;  //512 MB
 
-    std::vector<std::pair<void*, size_t>> mem(10);
     {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<size_t> dis(minMallocSize, maxMallocSize);
+        mem::u64 allocateTime = 0;
+        mem::u64 deallocateTime = 0;
 
-        for (size_t i = 0; i < mem.size(); ++i)
+        std::vector<std::pair<void*, size_t>> mem(10);
         {
-            size_t sz = dis(gen);
-            void* ptr = pool.allocMemory(sz);
-            mem[i] = { ptr, sz };
-            assert(mem[i].first != nullptr);
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<size_t> dis(minMallocSize, maxMallocSize);
+
+            for (size_t i = 0; i < mem.size(); ++i)
+            {
+                size_t sz = dis(gen);
+                auto startTime = std::chrono::high_resolution_clock::now();
+                void* ptr = pool.allocMemory(sz);
+                auto endTime = std::chrono::high_resolution_clock::now();
+                allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+                mem[i] = { ptr, sz };
+                assert(mem[i].first != nullptr);
+            }
+            pool.collectStatistic();
         }
-        pool.collectStatistic();
+
+        {
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::shuffle(mem.begin(), mem.end(), gen);
+
+            for (size_t i = 0; i < mem.size(); ++i)
+            {
+                assert(mem[i].first != nullptr);
+                auto startTime = std::chrono::high_resolution_clock::now();
+                pool.freeMemory(mem[i].first);
+                auto endTime = std::chrono::high_resolution_clock::now();
+                deallocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+            }
+            pool.collectStatistic();
+        }
+
+        std::cout << "POOL stat: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
     }
 
     {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::shuffle(mem.begin(), mem.end(), gen);
+        mem::u64 allocateTime = 0;
+        mem::u64 deallocateTime = 0;
 
-        for (size_t i = 0; i < mem.size(); ++i)
+        std::vector<std::pair<void*, size_t>> mem(10);
         {
-            assert(mem[i].first != nullptr);
-            pool.freeMemory(mem[i].first);
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<size_t> dis(minMallocSize, maxMallocSize);
+
+            for (size_t i = 0; i < mem.size(); ++i)
+            {
+                size_t sz = dis(gen);
+                auto startTime = std::chrono::high_resolution_clock::now();
+                void* ptr = malloc(sz);
+                auto endTime = std::chrono::high_resolution_clock::now();
+                allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+                mem[i] = { ptr, sz };
+                assert(mem[i].first != nullptr);
+            }
+            pool.collectStatistic();
         }
-        pool.collectStatistic();
+
+        {
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::shuffle(mem.begin(), mem.end(), gen);
+
+            for (size_t i = 0; i < mem.size(); ++i)
+            {
+                assert(mem[i].first != nullptr);
+                auto startTime = std::chrono::high_resolution_clock::now();
+                free(mem[i].first);
+                auto endTime = std::chrono::high_resolution_clock::now();
+                deallocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+            }
+            pool.collectStatistic();
+        }
+
+        std::cout << "STD malloc: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
     }
+
     std::cout << "----------------Test_7 END-----------------" << std::endl;
     return true;
 }

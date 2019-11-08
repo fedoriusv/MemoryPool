@@ -6,8 +6,8 @@
 #include <list>
 #include <map>
 
-#define DEBUG_MEMORY 1
-#define ENABLE_STATISTIC 1
+#define DEBUG_MEMORY 0
+#define ENABLE_STATISTIC 0
 
 #ifdef new
 #   undef new
