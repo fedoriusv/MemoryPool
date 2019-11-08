@@ -53,7 +53,7 @@ namespace mem
 
         /*
         * MemoryPool constuctor
-        * param pageSize : page size
+        * param pageSize : page size (best size 65KB, but no more)
         * param allocator: allocator
         * param user: user data
         */
@@ -90,6 +90,12 @@ namespace mem
         void freeMemory(address_ptr memory);
 
         /*
+        * Prepare small table pools
+        * call it if need more speed, but it creates a log of empty pools
+        */
+        void preAllocatePools();
+
+        /*
         * Free pool, Return all requested allocation
         */
         void clear();
@@ -113,7 +119,7 @@ namespace mem
 
         struct Block
         {
-            Block()
+            Block() noexcept
                 : _pool(nullptr)
                 , _next(nullptr)
                 , _prev(nullptr)
@@ -152,42 +158,28 @@ namespace mem
         public:
 
             BlockList() noexcept
-                : _end(nullptr)
-                , _size(0)
+                 : _size(0)
             {
                 clear();
             }
 
             ~BlockList()
             {
-                if (_end)
-                {
-                    delete _end;
-                    _end = nullptr;
-                }
             }
 
             inline Block* begin()
             {
-                return _end->_next;
+                return _end._next;
             }
 
             inline Block* end()
             {
-                return _end;
+                return &_end;
             }
 
             void clear()
             {
-                if (_end)
-                {
-                    delete _end;
-                    _end = nullptr;
-                }
-
-                _end = new Block();
-                link(_end, _end);
-
+                link(&_end, &_end);
                 _size = 0;
             }
 
@@ -208,16 +200,16 @@ namespace mem
                     current = current->_next;
                 }
 
-                link(_end->_prev, block);
-                link(block, _end);
+                link(_end._prev, block);
+                link(block, &_end);
 
                 ++_size;
             }
 
             inline void insert(Block* block)
             {
-                link(_end->_prev, block);
-                link(block, _end);
+                link(_end._prev, block);
+                link(block, &_end);
 
                 ++_size;
             }
@@ -259,7 +251,7 @@ namespace mem
 
             inline bool empty() const
             {
-                return _end == _end->_next;
+                return &_end == _end._next;
             }
 
         private:
@@ -270,8 +262,8 @@ namespace mem
                 r->_prev = l;
             }
 
-            Block* _end;
-            s32 _size;
+            Block   _end;
+            s32     _size;
         };
 
         struct Pool
@@ -322,13 +314,16 @@ namespace mem
             std::list<Pool*> _pools;
         };
 
-        static const u64        k_maxSizeSmallTableAllocation = 32'768;
+        static const u64 k_countPagesPerAllocation = 16;
+
+        static const u64 k_maxSizeSmallTableAllocation = (32'768 - sizeof(Block));
         std::array<u16, (k_maxSizeSmallTableAllocation >> 2)> m_smallTableIndex;
         std::vector<PoolTable>  m_smallPoolTables;
 
         PoolTable               m_poolTable;
-        //best size 65KB
-        const u64               k_maxSizeTableAllocation;
+
+        const u64               k_pageSize;
+        const u64               k_maxSizePoolAllocation;
 
         BlockList               m_largeAllocations;
 
@@ -337,6 +332,7 @@ namespace mem
         std::vector<Pool*>      m_markedToDelete;
 
         Pool*   allocateFixedBlocksPool(PoolTable* table, u32 align);
+        Pool*   allocatePool(PoolTable* table, u32 initBlockSize, u32 align);
         void    deallocatePool(Pool* pool);
 
         Block* initBlock(address_ptr ptr, Pool* pool, u64 size);

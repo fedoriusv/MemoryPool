@@ -38,16 +38,17 @@ namespace mem
     MemoryPool::MemoryPool(u64 pageSize, MemoryAllocator* allocator, void* user)
         : m_allocator(allocator)
         , m_userData(user)
-        , k_maxSizeTableAllocation(pageSize)
+        , k_pageSize(pageSize)
+        , k_maxSizePoolAllocation(pageSize - sizeof(Block))
     {
 
-        assert(k_maxSizeTableAllocation >= 65'536);
+        assert(k_pageSize >= 65'536);
         m_smallTableIndex.fill(0);
         m_smallPoolTables.resize(s_smalBlockTableSizes.size(), {});
 
         u32 blockIndex = 0;
         auto blockIter = s_smalBlockTableSizes.cbegin();
-        for (u32 i = 0; i < (k_maxSizeSmallTableAllocation >> 2); ++i)
+        for (u64 i = 0; i < (k_maxSizeSmallTableAllocation >> 2); ++i)
         {
             u64 blockSize = (u64)((i + 1U) << 2U);
             while (blockIter != s_smalBlockTableSizes.cend() && *blockIter < blockSize)
@@ -62,13 +63,9 @@ namespace mem
         }
 
         //pre init
-        for (auto& table : m_smallPoolTables)
-        {
-            Pool* pool = MemoryPool::allocateFixedBlocksPool(&table, DEFAULT_ALIGMENT);
-            table._pools.push_back(pool);
-        }
+        //MemoryPool::preAllocatePools()
 
-        m_markedToDelete.reserve(24);
+        m_markedToDelete.reserve(32);
     }
 
     MemoryPool::~MemoryPool()
@@ -93,16 +90,16 @@ namespace mem
         if (aligmentedSize <= k_maxSizeSmallTableAllocation && aligment == DEFAULT_ALIGMENT)
         {
             //small allocations
+
             u32 index = (aligmentedSize >> 2) - 1;
             u32 tableIndex = m_smallTableIndex[index];
 
             PoolTable& table = m_smallPoolTables[tableIndex];
-            assert(!table._pools.empty());
-            /*if (table._pools.empty())
+            if (table._pools.empty())
             {
                 Pool* pool = MemoryPool::allocateFixedBlocksPool(&table, aligment);
                 table._pools.push_back(pool);
-            }*/
+            }
 
             Block* block = nullptr;
             for (auto& pool : table._pools)
@@ -133,7 +130,7 @@ namespace mem
 
             block = pool->_free.begin();
             pool->_free.erase(block);
-            pool->_used.priorityInsert(block);
+            pool->_used.insert(block);
 
             table._pools.push_back(pool);
             address_ptr ptr = block->ptr();
@@ -147,9 +144,10 @@ namespace mem
 
             return ptr;
         }
-        else if (aligmentedSize < k_maxSizeTableAllocation)
+        else if (aligmentedSize < k_maxSizePoolAllocation)
         {
             //pool allocation
+
             PoolTable& table = m_poolTable;
             for (auto& pool : table._pools)
             {
@@ -186,13 +184,9 @@ namespace mem
             }
 
             //create new pool
-            u64 allocationSize = alignUp<u64>(k_maxSizeTableAllocation / (k_maxSizeSmallTableAllocation + sizeof(Block)), aligment);
-            address_ptr memory = m_allocator->allocate(allocationSize, aligment, m_userData);
-            assert(memory);
+            Pool* pool = MemoryPool::allocatePool(&table, aligmentedSize, aligment);
 
-            Pool* pool = new Pool(&table, allocationSize, memory, allocationSize);
-
-            Block* block = initBlock(memory, pool, allocationSize);
+            Block* block = initBlock(pool->_memory, pool, aligmentedSize);
             pool->_free.priorityInsert(block);
 
             u64 requestedSize = aligmentedSize + sizeof(Block);
@@ -201,7 +195,7 @@ namespace mem
                 u64 freeMemory = block->_size - requestedSize;
                 block->_size = requestedSize;
 
-                address_ptr emptyMemory = (address_ptr)(reinterpret_cast<u64>(memory) + requestedSize);
+                address_ptr emptyMemory = (address_ptr)(reinterpret_cast<u64>(pool->_memory) + requestedSize);
                 Block* emptyBlock = initBlock(emptyMemory, pool, freeMemory);
                 pool->_free.priorityInsert(emptyBlock);
             }
@@ -215,7 +209,6 @@ namespace mem
             m_statistic._allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
 
             m_statistic.registerAllocation<1>(requestedSize);
-            m_statistic.registerPoolAllcation<1>(allocationSize);
 #endif //ENABLE_STATISTIC
 
             address_ptr ptr = block->ptr();
@@ -224,6 +217,7 @@ namespace mem
         else
         {
             //large allocation
+
             u64 allocationSize = alignUp<u64>(aligmentedSize + sizeof(Block), aligment);
             address_ptr memory = m_allocator->allocate(allocationSize, aligment, m_userData);
             assert(memory);
@@ -339,6 +333,16 @@ namespace mem
 #endif //ENABLE_STATISTIC
     }
 
+    void MemoryPool::preAllocatePools()
+    {
+        assert(table._pools.empty());
+        for (auto& table : m_smallPoolTables)
+        {
+            Pool* pool = MemoryPool::allocateFixedBlocksPool(&table, DEFAULT_ALIGMENT);
+            table._pools.push_back(pool);
+        }
+    }
+
     void MemoryPool::clear()
     {
         //TODO
@@ -358,8 +362,10 @@ namespace mem
 
     MemoryPool::Pool* MemoryPool::allocateFixedBlocksPool(PoolTable* table, u32 align)
     {
-        u64 countAllocations = k_maxSizeTableAllocation / sizeof(Block);
-        u64 allocatedSize = countAllocations * (table->_size + sizeof(Block));
+        //more correct but slow
+        u64 blockSize = table->_size + sizeof(Block);
+        u64 countAllocations = (k_maxSizePoolAllocation * k_countPagesPerAllocation) / blockSize;
+        u64 allocatedSize = alignUp<u64>(k_maxSizePoolAllocation, countAllocations * blockSize);
 
         address_ptr memory = m_allocator->allocate(allocatedSize, align, m_userData);
         assert(memory);
@@ -376,6 +382,21 @@ namespace mem
             Block* block = initBlock(memoryOffset, pool, table->_size);
             pool->_free.insert(block);
         }
+
+        return pool;
+    }
+
+    MemoryPool::Pool* MemoryPool::allocatePool(PoolTable* table, u32 initBlockSize, u32 align)
+    {
+        //TODO
+        u64 allocatedSize = alignUp<u64>(k_maxSizePoolAllocation + sizeof(Block), align);
+        address_ptr memory = m_allocator->allocate(allocatedSize, align, m_userData);
+        assert(memory);
+
+        Pool* pool = new(m_allocator->allocate(sizeof(Pool), align, m_userData)) Pool(table, initBlockSize, memory, allocatedSize);
+#if ENABLE_STATISTIC
+        m_statistic.registerPoolAllcation<1>(allocatedSize);
+#endif //ENABLE_STATISTIC
 
         return pool;
     }
