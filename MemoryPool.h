@@ -6,7 +6,7 @@
 #include <list>
 #include <map>
 
-#define DEBUG_MEMORY 0
+#define DEBUG_MEMORY 1
 #define ENABLE_STATISTIC 1
 
 #ifdef new
@@ -280,6 +280,19 @@ namespace mem
             {
                 _used.clear();
                 _free.clear();
+            }
+
+            void reset()
+            {
+                Block* block = _used.begin();
+                while (block != _used.end())
+                {
+                    Block* newxBlock = block->_next;
+                    _free.insert(block);
+
+                    block = newxBlock;
+                }
+                _used.clear();
             }
 
             PoolTable const*    _table;

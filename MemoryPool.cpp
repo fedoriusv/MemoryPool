@@ -223,8 +223,9 @@ namespace mem
             assert(memory);
 
             Block* block = initBlock(memory, nullptr, allocationSize);
-            m_largeAllocations.priorityInsert(block);
-
+#if DEBUG_MEMORY
+            m_largeAllocations.insert(block);
+#endif
 #if ENABLE_STATISTIC
             auto endTime = std::chrono::high_resolution_clock::now();
             m_statistic._allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
@@ -317,8 +318,7 @@ namespace mem
 #if DEBUG_MEMORY
             assert(!m_largeAllocations.empty() && "empty");
             m_largeAllocations.erase(block);
-#endif //DEBUG_MEMORY
-
+#endif
             u64 blockSize = block->_size;
             m_allocator->deallocate(ptr, blockSize, m_userData);
 #if ENABLE_STATISTIC
@@ -345,7 +345,30 @@ namespace mem
 
     void MemoryPool::clear()
     {
-        //TODO
+        for (auto& table : m_smallPoolTables)
+        {
+            auto poolIter = table._pools.begin();
+            while (poolIter != table._pools.end())
+            {
+                assert((*poolIter)->_used.empty()); // used elements
+                (*poolIter)->reset();
+
+                MemoryPool::deallocatePool(*poolIter);
+
+                ++poolIter;
+            }
+            table._pools.clear();
+        }
+
+
+        assert(m_largeAllocations.empty()); //used elements
+        for (auto& block : m_largeAllocations)
+        {
+            u64 blockSize = block._size;
+            m_allocator->deallocate(&block, blockSize, m_userData);
+        }
+        m_largeAllocations.clear();
+
 #if ENABLE_STATISTIC
         m_statistic.reset();
 #endif //ENABLE_STATISTIC

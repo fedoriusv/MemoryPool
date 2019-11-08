@@ -184,7 +184,7 @@ bool Test_2()
 {
     std::cout << "----------------Test_2 (Small Allocation. 2 alloc many times)-----------------" << std::endl;
 
-    const int countIter = 100'000;
+    const size_t countIter = 100'000;
     {
         mem::MemoryPool pool(g_pageSize);
         pool.preAllocatePools();
@@ -248,6 +248,13 @@ bool Test_3()
 
     mem::MemoryPool pool(g_pageSize);
 
+    void* ga[2];
+    void* gb[2];
+    void* gc[2];
+    void* gd[2];
+    void* ge[2];
+    void* gf[2];
+
     for (size_t i = 0; i < 2; ++i)
     {
         size_t koef = (i * 10) + 1;
@@ -255,22 +262,26 @@ bool Test_3()
             void* a = pool.allocMemory(30 * koef);
             assert(a != nullptr);
             memset(a, 'a', 30 * koef);
+            ga[i] = a;
 
             void* b = pool.allocMemory(40 * koef);
             assert(b != nullptr);
             memset(b, 'b', 40 * koef);
+            gb[i] = b;
 
             void* c = pool.allocMemory(50 * koef);
             assert(c != nullptr);
             memset(c, 'c', 50 * koef);
+            gc[i] = c;
 
             void* d = pool.allocMemory(60 * koef);
             assert(d != nullptr);
             memset(d, 'd', 60 * koef);
+            gd[i] = d;
 
             {
                 char* ca = (char*)a;
-                for (int i = 0; i < 30 * koef; ++i)
+                for (size_t i = 0; i < 30 * koef; ++i)
                 {
                     if (ca[i] != 'a')
                     {
@@ -280,7 +291,7 @@ bool Test_3()
                 }
 
                 char* cb = (char*)b;
-                for (int i = 0; i < 40 * koef; ++i)
+                for (size_t i = 0; i < 40 * koef; ++i)
                 {
                     if (cb[i] != 'b')
                     {
@@ -290,7 +301,7 @@ bool Test_3()
                 }
 
                 char* cc = (char*)c;
-                for (int i = 0; i < 50 * koef; ++i)
+                for (size_t i = 0; i < 50 * koef; ++i)
                 {
                     if (cc[i] != 'c')
                     {
@@ -301,7 +312,7 @@ bool Test_3()
             }
 
             char* cd = (char*)d;
-            for (int i = 0; i < 60 * koef; ++i)
+            for (size_t i = 0; i < 60 * koef; ++i)
             {
                 if (cd[i] != 'd')
                 {
@@ -318,14 +329,16 @@ bool Test_3()
             void* e = pool.allocMemory(80 * koef);
             assert(e != nullptr);
             memset(e, 'e', 80 * koef);
+            ge[i] = e;
 
             void* f = pool.allocMemory(80 * koef);
             assert(f != nullptr);
             memset(f, 'f', 80 * koef);
+            gf[i] = f;
 
             {
                 char* cd = (char*)d;
-                for (int i = 0; i < 60 * koef; ++i)
+                for (size_t i = 0; i < 60 * koef; ++i)
                 {
                     if (cd[i] != 'd')
                     {
@@ -335,7 +348,7 @@ bool Test_3()
                 }
 
                 char* ce = (char*)e;
-                for (int i = 0; i < 80 * koef; ++i)
+                for (size_t i = 0; i < 80 * koef; ++i)
                 {
                     if (ce[i] != 'e')
                     {
@@ -345,7 +358,7 @@ bool Test_3()
                 }
 
                 char* cf = (char*)f;
-                for (int i = 0; i < 80 * koef; ++i)
+                for (size_t i = 0; i < 80 * koef; ++i)
                 {
                     if (cf[i] != 'f')
                     {
@@ -358,10 +371,21 @@ bool Test_3()
             std::cout << "After Create" << std::endl;
             pool.collectStatistic();
         }
-    }
+
         std::cout << "After Destroy" << std::endl;
         pool.collectStatistic();
         assert(true);
+    }
+
+    for (size_t i = 0; i < 2; ++i)
+    {
+        pool.freeMemory(ga[i]);
+        //pool.freeMemory(gb); already deleted
+        //pool.freeMemory(gc); already deleted
+        pool.freeMemory(gd[i]);
+        pool.freeMemory(ge[i]);
+        pool.freeMemory(gf[i]);
+    }
 
     std::cout << "After Destroy All" << std::endl;
     pool.collectStatistic();
@@ -381,16 +405,16 @@ bool Test_4()
     const size_t maxMallocSize = g_pageSize - 1;  //64 KB
 
     const size_t testSize = 32'000;
-    std::vector<std::pair<void*, int>> mem(testSize);
+    std::vector<std::pair<void*, size_t>> mem(testSize);
     {
         std::random_device rd;
         std::mt19937 gen(rd());
-        std::uniform_int_distribution<> dis(minMallocSize, maxMallocSize);
+        std::uniform_int_distribution<size_t> dis(minMallocSize, maxMallocSize);
 
-        for (int i = 0; i < mem.size(); ++i)
+        for (size_t i = 0; i < mem.size(); ++i)
         {
-            int sz = dis(gen);
-            mem[i] = std::make_pair(nullptr, sz);
+            size_t sz = dis(gen);
+            mem[i] = { nullptr, sz };
         }
     }
 
@@ -410,7 +434,7 @@ bool Test_4()
         }
         pool.collectStatistic();
 
-        std::vector<std::pair<void*, int>> memSuffle(testSize);
+        std::vector<std::pair<void*, size_t>> memSuffle(testSize);
         std::copy(mem.begin(), mem.end(), memSuffle.begin());
         std::random_device rd;
         std::mt19937 gen(rd());
@@ -444,7 +468,7 @@ bool Test_4()
             mem[i].first = ptr;
         }
 
-        std::vector<std::pair<void*, int>> memSuffle(testSize);
+        std::vector<std::pair<void*, size_t>> memSuffle(testSize);
         std::copy(mem.begin(), mem.end(), memSuffle.begin());
         std::random_device rd;
         std::mt19937 gen(rd());
@@ -488,17 +512,17 @@ bool Test_7()
     const size_t minMallocSize = g_pageSize;
     const size_t maxMallocSize = 1024 * 1024 * 512;  //512 MB
 
-    std::vector<std::pair<void*, int>> mem(10);
+    std::vector<std::pair<void*, size_t>> mem(10);
     {
         std::random_device rd;
         std::mt19937 gen(rd());
-        std::uniform_int_distribution<> dis(minMallocSize, maxMallocSize);
+        std::uniform_int_distribution<size_t> dis(minMallocSize, maxMallocSize);
 
         for (size_t i = 0; i < mem.size(); ++i)
         {
-            int sz = dis(gen);
+            size_t sz = dis(gen);
             void* ptr = pool.allocMemory(sz);
-            mem[i] = std::make_pair(ptr, sz);
+            mem[i] = { ptr, sz };
             assert(mem[i].first != nullptr);
         }
         pool.collectStatistic();
@@ -531,19 +555,19 @@ bool Test_8()
     //large pools
     mem::MemoryPool pool(g_pageSize);
 
-    const int maxMallocSize = 10 * 1024 * 1024;
+    const size_t maxMallocSize = 10 * 1024 * 1024;
 
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> dis(1024, maxMallocSize);
 
-    std::vector<std::pair<int, void*>> sizesPool;
+    std::vector<std::pair<size_t, void*>> sizesPool;
     std::vector<void*> sizesDefault;
  
-    const int countAllocation = 1000;
+    const size_t countAllocation = 1000;
     for (size_t i = 0; i < countAllocation; ++i)
     {
-        int sz = dis(gen);
+        size_t sz = dis(gen);
         sizesPool.push_back(std::make_pair(sz, nullptr));
     }
 
@@ -551,14 +575,14 @@ bool Test_8()
     {
         size.second = pool.allocMemory(size.first);
         assert(size.second);
-        memset(size.second, size.first, size.first);
+        memset(size.second, (int)size.first, size.first);
 
         auto startTime = std::chrono::high_resolution_clock::now();
         void* ptr = malloc(size.first);
         auto endTime = std::chrono::high_resolution_clock::now();
         allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
         assert(ptr);
-        memset(ptr, size.first, size.first);
+        memset(ptr, (int)size.first, size.first);
         sizesDefault.push_back(ptr);
     }
     std::cout << "After Create" << std::endl;
