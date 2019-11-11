@@ -17,7 +17,6 @@
 #   undef delete
 #endif 
 
-
 namespace mem
 {
     typedef unsigned short      u16;
@@ -45,8 +44,8 @@ namespace mem
         {
         public:
 
-            MemoryAllocator() {};
-            virtual ~MemoryAllocator() {};
+            explicit MemoryAllocator() noexcept = default;
+            virtual ~MemoryAllocator() = default;
 
             virtual address_ptr allocate(u64 size, u32 aligment = 0, void* user = nullptr) = 0;
             virtual void        deallocate(address_ptr memory, u64 size = 0, void* user = nullptr) = 0;
@@ -58,7 +57,7 @@ namespace mem
         * param allocator: allocator
         * param user: user data
         */
-        explicit MemoryPool(u64 pageSize, MemoryAllocator* allocator = MemoryPool::getDefaultMemoryAllocator(), void* user = nullptr);
+        explicit MemoryPool(u64 pageSize, MemoryAllocator* allocator = MemoryPool::getDefaultMemoryAllocator(), void* user = nullptr) noexcept;
 
         /*
         * ~MemoryPool destuctor
@@ -446,8 +445,8 @@ namespace mem
     {
     public:
 
-        DefaultMemoryAllocator() {};
-        ~DefaultMemoryAllocator() {};
+        explicit DefaultMemoryAllocator() noexcept = default;
+        ~DefaultMemoryAllocator() = default;
 
         address_ptr allocate(u64 size, u32 aligment = 0, void* user = nullptr) override;
         void        deallocate(address_ptr memory, u64 size = 0, void* user = nullptr) override;

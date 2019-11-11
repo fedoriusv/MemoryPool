@@ -35,7 +35,7 @@ namespace mem
 
     MemoryPool::MemoryAllocator* MemoryPool::s_defaultMemoryAllocator = nullptr;
 
-    MemoryPool::MemoryPool(u64 pageSize, MemoryAllocator* allocator, void* user)
+    MemoryPool::MemoryPool(u64 pageSize, MemoryAllocator* allocator, void* user) noexcept
         : m_allocator(allocator)
         , m_userData(user)
         , k_pageSize(pageSize)
@@ -461,6 +461,7 @@ namespace mem
             << " Count Allcations/Pools: " << m_statistic._tableAllocationCount[2] << "/" << m_statistic._poolsAllocationCount[2] << std::endl;
 #endif //ENABLE_STATISTIC
     }
+
 
     address_ptr DefaultMemoryAllocator::allocate(u64 size, u32 aligment, void* user)
     {

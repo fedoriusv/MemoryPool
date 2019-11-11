@@ -15,9 +15,37 @@
 #   define TEST(x) assert(x)
 #else
 #   define TEST(x) x
-#endif 
+#endif
+
+#ifdef WIN32
+class WinMemoryAllocator : public mem::MemoryPool::MemoryAllocator
+{
+public:
+
+    explicit WinMemoryAllocator() noexcept = default;
+    ~WinMemoryAllocator() = default;
+
+    mem::address_ptr allocate(mem::u64 size, mem::u32 aligment = 0, void* user = nullptr) override
+    {
+        LPVOID ptr = VirtualAlloc(NULL, size, MEM_COMMIT, PAGE_READWRITE);
+        assert(ptr);
+
+        return ptr;
+    }
+
+    void deallocate(mem::address_ptr memory, mem::u64 size = 0, void* user = nullptr) override
+    {
+        BOOL result = VirtualFree(memory, 0, MEM_RELEASE);
+        assert(result);
+    }
+};
+#endif
 
 size_t g_pageSize;
+
+#ifdef WIN32
+WinMemoryAllocator g_allocator;
+#endif
 
 bool Test_0()
 {
@@ -26,7 +54,7 @@ bool Test_0()
     //create seq 32k allcation increase size, after that randomly delete it
     std::vector<std::pair<void*, size_t>> mem(32'768);
     {
-        mem::MemoryPool pool(g_pageSize);
+        mem::MemoryPool pool(g_pageSize, &g_allocator);
         pool.preAllocatePools();
         pool.collectStatistic();
 
@@ -43,6 +71,7 @@ bool Test_0()
             assert(ptr != nullptr);
 
             mem[i] = { ptr, i };
+            memset(ptr, (int)i, i + 1);
         }
         pool.collectStatistic();
 
@@ -77,6 +106,7 @@ bool Test_0()
             assert(ptr != nullptr);
 
             mem[i] = { ptr, i };
+            memset(ptr, (int)i, i + 1);
         }
 
         std::random_device rd;
@@ -103,7 +133,7 @@ bool Test_1()
 {
     std::cout << "----------------Test_1 (Small Allocation. Base)-----------------" << std::endl;
 
-    mem::MemoryPool pool(g_pageSize);
+    mem::MemoryPool pool(g_pageSize, &g_allocator);
 
     {
         void* a = pool.allocMemory(sizeof(int));
@@ -186,7 +216,7 @@ bool Test_2()
 
     const size_t countIter = 100'000;
     {
-        mem::MemoryPool pool(g_pageSize);
+        mem::MemoryPool pool(g_pageSize, &g_allocator);
         pool.preAllocatePools();
 
         mem::u64 allocateTime = 0;
@@ -202,6 +232,8 @@ bool Test_2()
 
             assert(ptr1 != nullptr);
             assert(ptr2 != nullptr);
+            memset(ptr1, (int)i, sizeof(int));
+            memset(ptr2, (int)i, sizeof(int));
 
             auto startTime1 = std::chrono::high_resolution_clock::now();
             pool.freeMemory(ptr2);
@@ -227,6 +259,8 @@ bool Test_2()
 
             assert(ptr1 != nullptr);
             assert(ptr2 != nullptr);
+            memset(ptr1, (int)i, sizeof(int));
+            memset(ptr2, (int)i, sizeof(int));
 
             auto startTime1 = std::chrono::high_resolution_clock::now();
             free(ptr1);
@@ -246,7 +280,7 @@ bool Test_3()
 {
     std::cout << "----------------Test_3 (Small Allocation. Check content)-----------------" << std::endl;
 
-    mem::MemoryPool pool(g_pageSize);
+    mem::MemoryPool pool(g_pageSize, &g_allocator);
 
     void* ga[2];
     void* gb[2];
@@ -399,7 +433,7 @@ bool Test_4()
     std::cout << "----------------Test_4 (Medium allocation)-----------------" << std::endl;
 
     //create 32k-64k rendom allcation increase size, after that randomly delete it
-    mem::MemoryPool pool(g_pageSize);
+    mem::MemoryPool pool(g_pageSize, &g_allocator);
 
     const size_t minMallocSize = 32'736;
     const size_t maxMallocSize = g_pageSize - 1;  //64 KB
@@ -430,6 +464,7 @@ bool Test_4()
             allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime0 - startTime0).count();
 
             assert(ptr != nullptr);
+            memset(ptr, (int)i, mem[i].second);
             mem[i].first = ptr;
         }
         pool.collectStatistic();
@@ -465,6 +500,7 @@ bool Test_4()
             allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
 
             assert(ptr != nullptr);
+            memset(ptr, (int)i, mem[i].second);
             mem[i].first = ptr;
         }
 
@@ -508,7 +544,7 @@ bool Test_7()
 {
     std::cout << "----------------Test_7 (Large allocation)-----------------" << std::endl;
 
-    mem::MemoryPool pool(g_pageSize);
+    mem::MemoryPool pool(g_pageSize, &g_allocator);
     const size_t minMallocSize = g_pageSize;
     const size_t maxMallocSize = 1024 * 1024 * 512;  //512 MB
 
@@ -530,6 +566,7 @@ bool Test_7()
                 auto endTime = std::chrono::high_resolution_clock::now();
                 allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
                 mem[i] = { ptr, sz };
+                memset(ptr, (int)i, sz);
                 assert(mem[i].first != nullptr);
             }
             pool.collectStatistic();
@@ -572,6 +609,7 @@ bool Test_7()
                 auto endTime = std::chrono::high_resolution_clock::now();
                 allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
                 mem[i] = { ptr, sz };
+                memset(ptr, (int)i, sz);
                 assert(mem[i].first != nullptr);
             }
             pool.collectStatistic();
@@ -609,7 +647,7 @@ bool Test_8()
     mem::u64 deallocateTime = 0;
 
     //large pools
-    mem::MemoryPool pool(g_pageSize);
+    mem::MemoryPool pool(g_pageSize, &g_allocator);
 
     const size_t maxMallocSize = 10 * 1024 * 1024;
 
@@ -627,6 +665,7 @@ bool Test_8()
         sizesPool.push_back(std::make_pair(sz, nullptr));
     }
 
+    //TODO
     for (auto& size : sizesPool)
     {
         size.second = pool.allocMemory(size.first);
