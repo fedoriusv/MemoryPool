@@ -6,8 +6,8 @@
 #include <list>
 #include <map>
 
-#define DEBUG_MEMORY 1
-#define ENABLE_STATISTIC 1
+#define DEBUG_MEMORY 0
+#define ENABLE_STATISTIC 0
 
 #ifdef new
 #   undef new
@@ -298,7 +298,7 @@ namespace mem
 
             PoolTable const*    _table;
             address_ptr         _memory;
-            const u64           _blockSize;
+            u64                 _blockSize;
             const u64           _poolSize;
             BlockList           _used;
             BlockList           _free;
@@ -347,10 +347,16 @@ namespace mem
         std::vector<Pool*>      m_markedToDelete;
 
         Pool*   allocateFixedBlocksPool(PoolTable* table, u32 align);
-        Pool*   allocatePool(PoolTable* table, u32 initBlockSize, u32 align);
+        Pool*   allocatePool(PoolTable* table, u32 align);
         void    deallocatePool(Pool* pool);
 
         Block* initBlock(address_ptr ptr, Pool* pool, u64 size);
+        void freeBlock(Block* block);
+
+        Block* allocateFromSmallTables(u64 size);
+        Block* allocateFromTable(u64 size);
+
+        const bool k_deleteUnusedPools;
 
 #if ENABLE_STATISTIC
         struct Statistic

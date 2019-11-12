@@ -680,7 +680,7 @@ bool Test_6()
 
             case 1: //delete
             {
-                int index = std::get<2>(events[i]);
+                size_t index = std::get<2>(events[i]);
                 void* ptr = pointers[index].first;
                 assert(ptr);
                 auto startTime = std::chrono::high_resolution_clock::now();
@@ -694,12 +694,12 @@ bool Test_6()
 
             case 2:
             {
-                int index = std::get<2>(events[i]);
+                size_t index = std::get<2>(events[i]);
                 void* ptr = pointers[index].first;
                 size_t size = pointers[index].second;
                 assert(ptr);
 
-                memset(ptr, index, size);
+                memset(ptr, (int)index, size);
             }
             break;
             }
@@ -748,7 +748,7 @@ bool Test_6()
 
             case 1: //delete
             {
-                int index = std::get<2>(events[i]);
+                size_t index = std::get<2>(events[i]);
                 void* ptr = pointers[index].first;
                 assert(ptr);
                 auto startTime = std::chrono::high_resolution_clock::now();
@@ -762,12 +762,12 @@ bool Test_6()
 
             case 2:
             {
-                int index = std::get<2>(events[i]);
+                size_t index = std::get<2>(events[i]);
                 void* ptr = pointers[index].first;
                 size_t size = pointers[index].second;
                 assert(ptr);
 
-                memset(ptr, index, size);
+                memset(ptr, (int)index, size);
             }
             break;
             }
@@ -865,7 +865,6 @@ bool Test_7()
                 memset(ptr, (int)i, sz);
                 assert(mem[i].first != nullptr);
             }
-            pool.collectStatistic();
         }
 
         {
@@ -881,7 +880,6 @@ bool Test_7()
                 auto endTime = std::chrono::high_resolution_clock::now();
                 deallocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
             }
-            pool.collectStatistic();
         }
 
         std::cout << "STD malloc: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;

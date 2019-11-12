@@ -40,6 +40,8 @@ namespace mem
         , m_userData(user)
         , k_pageSize(pageSize)
         , k_maxSizePoolAllocation(pageSize)
+
+        , k_deleteUnusedPools(true)
     {
 
         assert(k_pageSize >= 65'536);
@@ -91,56 +93,14 @@ namespace mem
         if (aligmentedSize <= k_maxSizeSmallTableAllocation && aligment == DEFAULT_ALIGMENT)
         {
             //small allocations
-
-            u32 index = (aligmentedSize >> 2) - 1;
-            u32 tableIndex = m_smallTableIndex[index];
-
-            PoolTable& table = m_smallPoolTables[tableIndex];
-            if (table._pools.empty())
-            {
-                Pool* pool = MemoryPool::allocateFixedBlocksPool(&table, aligment);
-                table._pools.push_back(pool);
-            }
-
-            Block* block = nullptr;
-            for (auto& pool : table._pools)
-            {
-                if (!pool->_free.empty())
-                {
-                    Block* block = pool->_free.begin();
-                    if (block != pool->_free.end())
-                    {
-                        assert(block->_size == pool->_blockSize);
-                        pool->_free.erase(block);
-                        pool->_used.insert(block);
-                        address_ptr ptr = block->ptr();
-#if ENABLE_STATISTIC
-                        auto endTime = std::chrono::high_resolution_clock::now();
-                        m_statistic._allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
-
-                        m_statistic.registerAllocation<0>(pool->_blockSize);
-#endif //ENABLE_STATISTIC
-
-                        return ptr;
-                    }
-                }
-            }
-
-            //allocate new pool
-            Pool* pool = MemoryPool::allocateFixedBlocksPool(&table, aligment);
-
-            block = pool->_free.begin();
-            pool->_free.erase(block);
-            pool->_used.insert(block);
-
-            table._pools.push_back(pool);
+            Block* block = allocateFromSmallTables(aligmentedSize);
+            assert(block);
             address_ptr ptr = block->ptr();
-
 #if ENABLE_STATISTIC
             auto endTime = std::chrono::high_resolution_clock::now();
             m_statistic._allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
 
-            m_statistic.registerAllocation<0>(pool->_blockSize);
+            m_statistic.registerAllocation<0>(block->_size);
 #endif //ENABLE_STATISTIC
 
             return ptr;
@@ -148,76 +108,21 @@ namespace mem
         else if (aligmentedSize <= k_maxSizePoolAllocation && aligment == DEFAULT_ALIGMENT)
         {
             //pool allocation
-
-            PoolTable& table = m_poolTable;
-            for (auto& pool : table._pools)
-            {
-                if (!pool->_free.empty())
-                {
-                    Block* block = pool->_free.begin();
-                    while (block != pool->_free.end())
-                    {
-                        u64 requestedSize = aligmentedSize + sizeof(Block);
-                        if (block->_size >= requestedSize)
-                        {
-                            u64 freeMemory = block->_size - requestedSize;
-                            block->_size = requestedSize;
-
-                            address_ptr emptyMemory = (address_ptr)(reinterpret_cast<u64>(block->ptr()) + requestedSize);
-                            Block* emptyBlock = initBlock(emptyMemory, pool, freeMemory);
-                            pool->_free.priorityInsert(emptyBlock);
-
-                            pool->_free.erase(block);
-                            pool->_used.priorityInsert(block);
-
-                            address_ptr ptr = block->ptr();
-#if ENABLE_STATISTIC
-                            auto endTime = std::chrono::high_resolution_clock::now();
-                            m_statistic._allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
-
-                            m_statistic.registerAllocation<1>(requestedSize);
-#endif //ENABLE_STATISTIC
-                            return ptr;
-                        }
-                        block = block->_next;
-                    }
-                }
-            }
-
-            //create new pool
-            Pool* pool = MemoryPool::allocatePool(&table, aligmentedSize, aligment);
-            Block* block = pool->_free.begin();
-            assert(block != pool->_free.end());
-
-            u64 requestedSize = aligmentedSize + sizeof(Block);
-            if (block->_size > requestedSize)
-            {
-                u64 freeMemory = block->_size - requestedSize;
-                block->_size = requestedSize;
-
-                address_ptr emptyMemory = (address_ptr)(reinterpret_cast<u64>(pool->_memory) + requestedSize);
-                Block* emptyBlock = initBlock(emptyMemory, pool, freeMemory);
-                pool->_free.priorityInsert(emptyBlock);
-            }
-
-            pool->_free.erase(block);
-            pool->_used.priorityInsert(block);
-            table._pools.push_back(pool);
-
+            Block* block = allocateFromTable(aligmentedSize);
+            assert(block);
+            address_ptr ptr = block->ptr();
 #if ENABLE_STATISTIC
             auto endTime = std::chrono::high_resolution_clock::now();
             m_statistic._allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
 
-            m_statistic.registerAllocation<1>(requestedSize);
+            m_statistic.registerAllocation<1>(block->_size);
 #endif //ENABLE_STATISTIC
 
-            address_ptr ptr = block->ptr();
             return ptr;
         }
         else
         {
             //large allocation
-
             u64 allocationSize = alignUp<u64>(aligmentedSize + sizeof(Block), aligment);
             address_ptr memory = m_allocator->allocate(allocationSize, aligment, m_userData);
             assert(memory);
@@ -253,97 +158,7 @@ namespace mem
         assert(block);
         if (block->_pool)
         {
-            Pool* pool = block->_pool;
-            pool->_used.erase(block);
-
-            if (pool->_table->_type == PoolTable::SmallTable)
-            {
-                assert(block->_size == pool->_table->_size);
-                pool->_free.insert(block);
-#if ENABLE_STATISTIC
-                m_statistic.registerDeallocation<0>(block->_size);
-#endif //ENABLE_STATISTIC
-
-                bool skip = true;
-                std::list<Pool*>& pools = const_cast<std::list<Pool*>&>(pool->_table->_pools);
-
-                m_markedToDelete.clear();
-                for (std::list<Pool*>::iterator iter = pools.begin(); iter != pools.end();)
-                {
-                    if ((*iter)->_used.empty())
-                    {
-                        if (skip) //skip first
-                        {
-                            skip = false;
-                        }
-                        else
-                        {
-                            m_markedToDelete.push_back(*iter);
-                            iter = pools.erase(iter);
-
-                            continue;
-                        }
-                    }
-                    ++iter;
-                }
-
-                if (m_markedToDelete.size() > 0)
-                {
-                    for (auto& pool : m_markedToDelete)
-                    {
-#if ENABLE_STATISTIC
-                        m_statistic.registerPoolDeallocation<0>(pool->_poolSize);
-#endif //ENABLE_STATISTIC
-                        MemoryPool::deallocatePool(pool);
-                    }
-                    m_markedToDelete.clear();
-                }
-            }
-            else
-            {
-                assert(pool->_table->_type == PoolTable::Default);
-                u64 blockSize = block->_size;
-                pool->_free.priorityInsert(block);
-                //pool->_free.merge();
-#if ENABLE_STATISTIC
-                m_statistic.registerDeallocation<1>(blockSize);
-#endif //ENABLE_STATISTIC
-
-                bool skip = true;
-                std::list<Pool*>& pools = const_cast<std::list<Pool*>&>(pool->_table->_pools);
-
-                m_markedToDelete.clear();
-                for (std::list<Pool*>::iterator iter = pools.begin(); iter != pools.end();)
-                {
-                    if ((*iter)->_used.empty())
-                    {
-                        if (skip) //skip first
-                        {
-                            skip = false;
-                        }
-                        else
-                        {
-                            m_markedToDelete.push_back(*iter);
-                            iter = pools.erase(iter);
-
-                            continue;
-                        }
-                    }
-                    ++iter;
-                }
-
-//                if (m_markedToDelete.size() > 0)
-//                {
-//                    for (auto& pool : m_markedToDelete)
-//                    {
-//#if ENABLE_STATISTIC
-//                        m_statistic.registerPoolDeallocation<1>(pool->_poolSize);
-//#endif //ENABLE_STATISTIC
-//                        MemoryPool::deallocatePool(pool);
-//                    }
-//                    m_markedToDelete.clear();
-//                }
-            }
+            freeBlock(block);
         }
         else
         {
@@ -417,7 +232,6 @@ namespace mem
 
     MemoryPool::Pool* MemoryPool::allocateFixedBlocksPool(PoolTable* table, u32 align)
     {
-        //more correct but slow
         u64 blockSize = table->_size + sizeof(Block);
         u64 countAllocations = (k_maxSizePoolAllocation * k_countPagesPerAllocation) / blockSize;
         u64 allocatedSize = alignUp<u64>(k_maxSizePoolAllocation, countAllocations * blockSize);
@@ -434,27 +248,27 @@ namespace mem
         for (u32 i = 0; i < countAllocations; ++i)
         {
             address_ptr memoryOffset = (address_ptr)(reinterpret_cast<u64>(memory) + (i * (table->_size + sizeof(Block))));
-            Block* block = initBlock(memoryOffset, pool, table->_size);
+            Block* block = initBlock(memoryOffset, pool, blockSize);
             pool->_free.insert(block);
         }
 
         return pool;
     }
 
-    MemoryPool::Pool* MemoryPool::allocatePool(PoolTable* table, u32 initBlockSize, u32 align)
+    MemoryPool::Pool* MemoryPool::allocatePool(PoolTable* table, u32 align)
     {
         u64 allocatedSize = alignUp<u64>(k_maxSizePoolAllocation * k_countPagesPerAllocation, align);
         assert(table->_size == allocatedSize); //different aligment
         address_ptr memory = m_allocator->allocate(allocatedSize, align, m_userData);
         assert(memory);
 
-        Pool* pool = new(m_allocator->allocate(sizeof(Pool), align, m_userData)) Pool(table, initBlockSize, memory, allocatedSize);
+        Pool* pool = new(m_allocator->allocate(sizeof(Pool), align, m_userData)) Pool(table, 0, memory, allocatedSize);
 #if ENABLE_STATISTIC
         m_statistic.registerPoolAllocation<1>(allocatedSize);
 #endif //ENABLE_STATISTIC
 
         Block* block = initBlock(memory, pool, allocatedSize);
-        pool->_free.priorityInsert(block);
+        pool->_free.insert(block);
 
         return pool;
     }
@@ -470,6 +284,7 @@ namespace mem
 
     MemoryPool::Block* MemoryPool::initBlock(address_ptr ptr, Pool* pool, u64 size)
     {
+        assert(size >= sizeof(Block));
         Block* block = new(ptr)Block();
 #if DEBUG_MEMORY
         block->reset();
@@ -477,6 +292,214 @@ namespace mem
 #endif //DEBUG_MEMORY
         block->_size = size;
         block->_pool = pool;
+
+        return block;
+    }
+
+    void MemoryPool::freeBlock(Block* block)
+    {
+        Pool* pool = block->_pool;
+        pool->_used.erase(block);
+
+        if (pool->_table->_type == PoolTable::SmallTable)
+        {
+            assert(block->_size == pool->_table->_size + sizeof(Block));
+            pool->_free.insert(block);
+#if ENABLE_STATISTIC
+            m_statistic.registerDeallocation<0>(block->_size);
+#endif //ENABLE_STATISTIC
+
+            if (k_deleteUnusedPools)
+            {
+                bool skip = true;
+                std::list<Pool*>& pools = const_cast<std::list<Pool*>&>(pool->_table->_pools);
+
+                m_markedToDelete.clear();
+                for (std::list<Pool*>::iterator iter = pools.begin(); iter != pools.end();)
+                {
+                    if ((*iter)->_used.empty())
+                    {
+                        if (skip) //skip first
+                        {
+                            skip = false;
+                        }
+                        else
+                        {
+                            m_markedToDelete.push_back(*iter);
+                            iter = pools.erase(iter);
+
+                            continue;
+                        }
+                    }
+                    ++iter;
+                }
+
+                if (m_markedToDelete.size() > 0)
+                {
+                    for (auto& pool : m_markedToDelete)
+                    {
+#if ENABLE_STATISTIC
+                        m_statistic.registerPoolDeallocation<0>(pool->_poolSize);
+#endif //ENABLE_STATISTIC
+                        MemoryPool::deallocatePool(pool);
+                    }
+                    m_markedToDelete.clear();
+                }
+            }
+        }
+        else
+        {
+            assert(pool->_table->_type == PoolTable::Default);
+            u64 blockSize = block->_size;
+            pool->_free.insert(block);
+
+            assert(pool->_blockSize >= blockSize);
+            pool->_blockSize -= blockSize;
+            //pool->_free.priorityInsert(block);
+            //pool->_free.merge();
+#if ENABLE_STATISTIC
+            m_statistic.registerDeallocation<1>(blockSize);
+#endif //ENABLE_STATISTIC
+
+            if (k_deleteUnusedPools)
+            {
+                bool skip = true;
+                std::list<Pool*>& pools = const_cast<std::list<Pool*>&>(pool->_table->_pools);
+
+                m_markedToDelete.clear();
+                for (std::list<Pool*>::iterator iter = pools.begin(); iter != pools.end();)
+                {
+                    if ((*iter)->_used.empty())
+                    {
+                        if (skip) //skip first
+                        {
+                            skip = false;
+                        }
+                        else
+                        {
+                            m_markedToDelete.push_back(*iter);
+                            iter = pools.erase(iter);
+
+                            continue;
+                        }
+                    }
+                    ++iter;
+                }
+
+                if (m_markedToDelete.size() > 0)
+                {
+                    for (auto& pool : m_markedToDelete)
+                    {
+#if ENABLE_STATISTIC
+                        m_statistic.registerPoolDeallocation<1>(pool->_poolSize);
+#endif //ENABLE_STATISTIC
+                        MemoryPool::deallocatePool(pool);
+                    }
+                    m_markedToDelete.clear();
+                }
+            }
+        }
+    }
+
+    MemoryPool::Block* MemoryPool::allocateFromSmallTables(u64 aligmentedSize)
+    {
+        assert(aligmentedSize <= std::numeric_limits<u32>::max());
+        u32 index = (static_cast<u32>(aligmentedSize) >> 2) - 1;
+        u32 tableIndex = m_smallTableIndex[index];
+
+        PoolTable& table = m_smallPoolTables[tableIndex];
+        if (table._pools.empty())
+        {
+            Pool* pool = MemoryPool::allocateFixedBlocksPool(&table, DEFAULT_ALIGMENT);
+            table._pools.push_back(pool);
+        }
+
+        Block* block = nullptr;
+        for (auto& pool : table._pools)
+        {
+            if (!pool->_free.empty())
+            {
+                Block* block = pool->_free.begin();
+                if (block != pool->_free.end())
+                {
+                    assert(block->_size == pool->_blockSize + sizeof(Block));
+                    pool->_free.erase(block);
+                    pool->_used.insert(block);
+
+                    return block;
+                }
+            }
+        }
+
+        //allocate new pool
+        Pool* pool = MemoryPool::allocateFixedBlocksPool(&table, DEFAULT_ALIGMENT);
+        table._pools.push_back(pool);
+
+        block = pool->_free.begin();
+        pool->_free.erase(block);
+        pool->_used.insert(block);
+
+        return block;
+    }
+
+    MemoryPool::Block* MemoryPool::allocateFromTable(u64 aligmentedSize)
+    {
+        PoolTable& table = m_poolTable;
+        for (auto& pool : table._pools)
+        {
+            if (!pool->_free.empty())
+            {
+                Block* block = pool->_free.begin();
+                while (block != pool->_free.end())
+                {
+                    u64 requestedSize = aligmentedSize + sizeof(Block);
+                    if (block->_size >= requestedSize)
+                    {
+                        u64 freeMemory = block->_size - requestedSize;
+                        if (freeMemory > k_maxSizeSmallTableAllocation + sizeof(Block))
+                        {
+                            block->_size = requestedSize;
+
+                            address_ptr emptyMemory = (address_ptr)(reinterpret_cast<u64>(block) + requestedSize);
+                            Block* emptyBlock = initBlock(emptyMemory, pool, freeMemory);
+                            pool->_free.priorityInsert(emptyBlock);
+                        }
+                        pool->_free.erase(block);
+                        pool->_used.priorityInsert(block);
+                        pool->_blockSize += block->_size;
+                        assert(pool->_blockSize <= pool->_poolSize);
+
+                        return block;
+                    }
+                    block = block->_next;
+                }
+            }
+        }
+
+        //create new pool
+        Pool* pool = MemoryPool::allocatePool(&table, DEFAULT_ALIGMENT);
+        table._pools.push_back(pool);
+
+        Block* block = pool->_free.begin();
+        assert(block != pool->_free.end());
+
+        u64 requestedSize = aligmentedSize + sizeof(Block);
+        assert(block->_size >= requestedSize);
+
+        u64 freeMemory = block->_size - requestedSize;
+        if (freeMemory > k_maxSizeSmallTableAllocation + sizeof(Block))
+        {
+            block->_size = requestedSize;
+
+            address_ptr emptyMemory = (address_ptr)(reinterpret_cast<u64>(pool->_memory) + requestedSize);
+            Block* emptyBlock = initBlock(emptyMemory, pool, freeMemory);
+            pool->_free.priorityInsert(emptyBlock);
+        }
+
+        pool->_free.erase(block);
+        pool->_used.priorityInsert(block);
+        pool->_blockSize += block->_size;
+        assert(pool->_blockSize <= pool->_poolSize);
 
         return block;
     }
