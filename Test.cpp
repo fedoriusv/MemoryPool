@@ -819,7 +819,7 @@ bool Test_7()
                 auto endTime = std::chrono::high_resolution_clock::now();
                 allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
                 mem[i] = { ptr, sz };
-                memset(ptr, (int)i, sz);
+                memset(ptr, (int)i + 1, sz);
                 assert(mem[i].first != nullptr);
             }
             pool.collectStatistic();
@@ -862,7 +862,7 @@ bool Test_7()
                 auto endTime = std::chrono::high_resolution_clock::now();
                 allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
                 mem[i] = { ptr, sz };
-                memset(ptr, (int)i, sz);
+                memset(ptr, (int)i + 1, sz);
                 assert(mem[i].first != nullptr);
             }
         }
@@ -964,60 +964,6 @@ bool Test_8()
     std::cout << "STD malloc: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
 
     std::cout << "----------------Test_8 END-----------------" << std::endl;
-    return true;
-}
-
-bool Test_9()
-{
-    //small allocation
-    /*mem::MemoryPool pool({ g_pageSize, true, false });
-
-    const int maxMallocSize = 1024;
-
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(1, maxMallocSize);
-
-    std::vector<std::pair<int, void*>> sizesPool;
-    std::vector<void*> sizesDefault;
-
-    const int countAllocation = 1000;
-    for (int i = 0; i < countAllocation; ++i)
-    {
-        int sz = dis(gen);
-        sizesPool.push_back(std::make_pair(sz, nullptr));
-    }
-
-    for (auto& size : sizesPool)
-    {
-        size.second = pool.allocMemory(size.first);
-        assert(size.second);
-        memset(size.second, size.first, size.first);
-
-        void* ptr = malloc(size.first);
-        assert(ptr);
-        memset(ptr, size.first, size.first);
-        sizesDefault.push_back(ptr);
-    }
-
-    for (int i = 0; i < sizesPool.size(); ++i)
-    {
-        int d = memcmp(sizesPool[i].second, sizesDefault[i], sizesPool[i].first);
-        if (d != 0)
-        {
-            return false;
-        }
-    }
-
-    std::mt19937 gen1(rd());
-    std::shuffle(sizesPool.begin(), sizesPool.end(), gen1);
-
-    for (auto& size : sizesPool)
-    {
-        pool.freeMemory(size.second);
-    }
-    pool.collectStatistic();*/
-
     return true;
 }
 

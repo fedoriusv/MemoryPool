@@ -233,13 +233,14 @@ namespace mem
     MemoryPool::Pool* MemoryPool::allocateFixedBlocksPool(PoolTable* table, u32 align)
     {
         u64 blockSize = table->_size + sizeof(Block);
-        u64 countAllocations = (k_maxSizePoolAllocation * k_countPagesPerAllocation) / blockSize;
-        u64 allocatedSize = alignUp<u64>(k_maxSizePoolAllocation, countAllocations * blockSize);
+        u64 countAllocations = ((k_maxSizePoolAllocation * k_countPagesPerAllocation) - sizeof(Pool)) / blockSize;
+        u64 allocatedSize = alignUp<u64>(k_maxSizePoolAllocation, (countAllocations * blockSize) + sizeof(Pool));
 
         address_ptr memory = m_allocator->allocate(allocatedSize, align, m_userData);
         assert(memory);
 
-        Pool* pool = new(m_allocator->allocate(sizeof(Pool), align, m_userData)) Pool(table, table->_size, memory, allocatedSize);
+        Pool* pool = new(memory) Pool(table, table->_size, allocatedSize);
+        u64 memoryOffset = reinterpret_cast<u64>(pool->block());
 
 #if ENABLE_STATISTIC
         m_statistic.registerPoolAllocation<0>(allocatedSize);
@@ -247,8 +248,8 @@ namespace mem
 
         for (u32 i = 0; i < countAllocations; ++i)
         {
-            address_ptr memoryOffset = (address_ptr)(reinterpret_cast<u64>(memory) + (i * (table->_size + sizeof(Block))));
-            Block* block = initBlock(memoryOffset, pool, blockSize);
+            address_ptr memoryBlock = reinterpret_cast<address_ptr>(memoryOffset + (i * (table->_size + sizeof(Block))));
+            Block* block = initBlock(memoryBlock, pool, blockSize);
             pool->_free.insert(block);
         }
 
@@ -262,12 +263,13 @@ namespace mem
         address_ptr memory = m_allocator->allocate(allocatedSize, align, m_userData);
         assert(memory);
 
-        Pool* pool = new(m_allocator->allocate(sizeof(Pool), align, m_userData)) Pool(table, 0, memory, allocatedSize);
+        Pool* pool = new(memory) Pool(table, 0, allocatedSize);
+
 #if ENABLE_STATISTIC
         m_statistic.registerPoolAllocation<1>(allocatedSize);
 #endif //ENABLE_STATISTIC
 
-        Block* block = initBlock(memory, pool, allocatedSize);
+        Block* block = initBlock(pool->block(), pool, allocatedSize - sizeof(Pool));
         pool->_free.insert(block);
 
         return pool;
@@ -277,9 +279,7 @@ namespace mem
     {
         assert(pool);
         assert(pool->_used.empty());
-        m_allocator->deallocate(pool->_memory, pool->_poolSize, m_userData);
-
-        m_allocator->deallocate(pool, sizeof(Pool), m_userData);
+        m_allocator->deallocate(pool, pool->_poolSize, m_userData);
     }
 
     MemoryPool::Block* MemoryPool::initBlock(address_ptr ptr, Pool* pool, u64 size)
@@ -491,7 +491,7 @@ namespace mem
         {
             block->_size = requestedSize;
 
-            address_ptr emptyMemory = (address_ptr)(reinterpret_cast<u64>(pool->_memory) + requestedSize);
+            address_ptr emptyMemory = (address_ptr)(reinterpret_cast<u64>(pool->block()) + requestedSize);
             Block* emptyBlock = initBlock(emptyMemory, pool, freeMemory);
             pool->_free.priorityInsert(emptyBlock);
         }

@@ -30,7 +30,7 @@ namespace mem
     /*
     * class MemoryPool
     */
-    class MemoryPool
+    class MemoryPool final
     {
     public:
 
@@ -105,9 +105,7 @@ namespace mem
         */
         static MemoryAllocator* getDefaultMemoryAllocator();
 
-//#if ENABLE_STATISTIC
         void collectStatistic();
-//#endif //ENABLE_STATISTIC
 
     private:
 
@@ -144,12 +142,16 @@ namespace mem
 #if DEBUG_MEMORY
             address_ptr _ptr;
 #endif //DEBUG_MEMORY
-            inline address_ptr ptr()
+            address_ptr ptr()
             {
+#if DEBUG_MEMORY
                 u64 offset = sizeof(Block);
-                address_ptr ptr = (address_ptr)(reinterpret_cast<u64>(this) + offset);
+                address_ptr ptr = reinterpret_cast<address_ptr>(reinterpret_cast<u64>(this) + offset);
                 assert(ptr);
                 return ptr;
+#else
+                return reinterpret_cast<address_ptr>(reinterpret_cast<u64>(this) + sizeof(Block));
+#endif
             }
         };
 
@@ -158,7 +160,9 @@ namespace mem
         public:
 
             BlockList() noexcept
+#if DEBUG_MEMORY
                  : _size(0)
+#endif
             {
                 clear();
             }
@@ -167,12 +171,12 @@ namespace mem
             {
             }
 
-            inline Block* begin()
+            Block* begin()
             {
                 return _end._next;
             }
 
-            inline Block* end()
+            Block* end()
             {
                 return &_end;
             }
@@ -180,7 +184,9 @@ namespace mem
             void clear()
             {
                 link(&_end, &_end);
+#if DEBUG_MEMORY
                 _size = 0;
+#endif
             }
 
             void priorityInsert(Block* block)
@@ -192,9 +198,9 @@ namespace mem
                     {
                         link(current->_prev, block);
                         link(block, current);
-
+#if DEBUG_MEMORY
                         ++_size;
-
+#endif
                         return;
                     }
                     current = current->_next;
@@ -202,16 +208,18 @@ namespace mem
 
                 link(_end._prev, block);
                 link(block, &_end);
-
+#if DEBUG_MEMORY
                 ++_size;
+#endif
             }
 
-            inline void insert(Block* block)
+            void insert(Block* block)
             {
                 link(_end._prev, block);
                 link(block, &_end);
-
+#if DEBUG_MEMORY
                 ++_size;
+#endif
             }
 
             void merge()
@@ -244,9 +252,9 @@ namespace mem
                 link(block->_prev, block->_next);
 #if DEBUG_MEMORY
                 block->reset();
-#endif
                 --_size;
                 assert(_size >= 0);
+#endif
 
                 return block->_next;
             }
@@ -265,7 +273,9 @@ namespace mem
             }
 
             Block   _end;
+#if DEBUG_MEMORY
             s32     _size;
+#endif
         };
 
         struct Pool
@@ -273,14 +283,25 @@ namespace mem
             Pool() = delete;
             Pool(const Pool&) = delete;
 
-            Pool(PoolTable const* table, u64 blockSize, address_ptr memory, u64 poolSize) noexcept
+            Pool(PoolTable const* table, u64 blockSize, u64 poolSize) noexcept
                 : _table(table)
-                , _memory(memory)
                 , _blockSize(blockSize)
                 , _poolSize(poolSize)
             {
                 _used.clear();
                 _free.clear();
+            }
+
+            address_ptr block() const
+            {
+#if DEBUG_MEMORY
+                u64 offset = sizeof(Pool);
+                address_ptr ptr = reinterpret_cast<address_ptr>(reinterpret_cast<u64>(this) + offset);
+                assert(ptr);
+                return ptr;
+#else
+                return reinterpret_cast<address_ptr>(reinterpret_cast<u64>(this) + sizeof(Pool));
+#endif
             }
 
             void reset()
@@ -297,7 +318,6 @@ namespace mem
             }
 
             PoolTable const*    _table;
-            address_ptr         _memory;
             u64                 _blockSize;
             const u64           _poolSize;
             BlockList           _used;
