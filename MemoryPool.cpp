@@ -351,12 +351,12 @@ namespace mem
         {
             assert(pool->_table->_type == PoolTable::Default);
             u64 blockSize = block->_size;
-            pool->_free.insert(block);
+            //pool->_free.insert(block);
+            pool->_free.priorityInsert(block);
+            pool->_free.merge();
 
             assert(pool->_blockSize >= blockSize);
             pool->_blockSize -= blockSize;
-            //pool->_free.priorityInsert(block);
-            //pool->_free.merge();
 #if ENABLE_STATISTIC
             m_statistic.registerDeallocation<1>(blockSize);
 #endif //ENABLE_STATISTIC

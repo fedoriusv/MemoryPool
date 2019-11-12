@@ -46,6 +46,9 @@ size_t g_pageSize;
 
 #ifdef WIN32
 WinMemoryAllocator g_allocator;
+//mem::DefaultMemoryAllocator g_allocator;
+#else
+mem::DefaultMemoryAllocator g_allocator;
 #endif
 
 bool Test_0()
@@ -143,32 +146,35 @@ bool Test_1()
         mem::u64 allocateTime = 0;
         mem::u64 deallocateTime = 0;
 
-        for (size_t i = 0; i < mem.size(); ++i)
+        for (size_t j = 0; j < 2; ++j)
         {
-            auto startTime0 = std::chrono::high_resolution_clock::now();
-            void* ptr = pool.allocMemory(i + 1);
-            auto endTime0 = std::chrono::high_resolution_clock::now();
-            allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime0 - startTime0).count();
+            for (size_t i = 0; i < mem.size(); ++i)
+            {
+                auto startTime0 = std::chrono::high_resolution_clock::now();
+                void* ptr = pool.allocMemory(i + 1);
+                auto endTime0 = std::chrono::high_resolution_clock::now();
+                allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime0 - startTime0).count();
 
-            assert(ptr != nullptr);
+                assert(ptr != nullptr);
 
-            mem[i] = { ptr, i };
-            memset(ptr, (int)i, i + 1);
-        }
-        pool.collectStatistic();
+                mem[i] = { ptr, i };
+                memset(ptr, (int)i, i + 1);
+            }
+            pool.collectStatistic();
 
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::shuffle(mem.begin(), mem.end(), gen);
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::shuffle(mem.begin(), mem.end(), gen);
 
-        for (size_t i = 0; i < mem.size(); ++i)
-        {
-            auto& val = mem[i];
-            assert(val.first != nullptr);
-            auto startTime1 = std::chrono::high_resolution_clock::now();
-            pool.freeMemory(val.first);
-            auto endTime1 = std::chrono::high_resolution_clock::now();
-            deallocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime1 - startTime1).count();
+            for (size_t i = 0; i < mem.size(); ++i)
+            {
+                auto& val = mem[i];
+                assert(val.first != nullptr);
+                auto startTime1 = std::chrono::high_resolution_clock::now();
+                pool.freeMemory(val.first);
+                auto endTime1 = std::chrono::high_resolution_clock::now();
+                deallocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime1 - startTime1).count();
+            }
         }
         pool.collectStatistic();
         std::cout << "POOL stat: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
@@ -178,30 +184,33 @@ bool Test_1()
         mem::u64 allocateTime = 0;
         mem::u64 deallocateTime = 0;
 
-        for (size_t i = 0; i < mem.size(); ++i)
+        for (size_t j = 0; j < 2; ++j)
         {
-            auto startTime = std::chrono::high_resolution_clock::now();
-            void* ptr = malloc(i + 1);
-            auto endTime = std::chrono::high_resolution_clock::now();
-            allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+            for (size_t i = 0; i < mem.size(); ++i)
+            {
+                auto startTime = std::chrono::high_resolution_clock::now();
+                void* ptr = malloc(i + 1);
+                auto endTime = std::chrono::high_resolution_clock::now();
+                allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
 
-            assert(ptr != nullptr);
+                assert(ptr != nullptr);
 
-            mem[i] = { ptr, i };
-            memset(ptr, (int)i, i + 1);
-        }
+                mem[i] = { ptr, i };
+                memset(ptr, (int)i, i + 1);
+            }
 
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::shuffle(mem.begin(), mem.end(), gen);
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::shuffle(mem.begin(), mem.end(), gen);
 
-        for (size_t i = 0; i < mem.size(); ++i)
-        {
-            assert(mem[i].first != nullptr);
-            auto startTime = std::chrono::high_resolution_clock::now();
-            free(mem[i].first);
-            auto endTime = std::chrono::high_resolution_clock::now();
-            deallocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+            for (size_t i = 0; i < mem.size(); ++i)
+            {
+                assert(mem[i].first != nullptr);
+                auto startTime = std::chrono::high_resolution_clock::now();
+                free(mem[i].first);
+                auto endTime = std::chrono::high_resolution_clock::now();
+                deallocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+            }
         }
 
         std::cout << "STD malloc: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
@@ -215,7 +224,7 @@ bool Test_2()
 {
     std::cout << "----------------Test_2 (Small Allocation. 2 alloc many times)-----------------" << std::endl;
 
-    const size_t countIter = 100'000;
+    const size_t countIter = 10'000'00;
     {
         mem::MemoryPool pool(g_pageSize, &g_allocator);
         pool.preAllocatePools();
@@ -582,7 +591,7 @@ bool Test_6()
     const size_t minMallocSize = 32'736;
     const size_t maxMallocSize = g_pageSize;
 
-    const int countEvents = 10000;
+    const int countEvents = 100'000;
     std::vector<std::tuple<int, size_t, size_t>> events;
 
     //generate event
@@ -801,11 +810,12 @@ bool Test_7()
     const size_t minMallocSize = g_pageSize;
     const size_t maxMallocSize = 1024 * 1024 * 512;  //512 MB
 
+    const size_t countTest = 30;
     {
         mem::u64 allocateTime = 0;
         mem::u64 deallocateTime = 0;
 
-        std::vector<std::pair<void*, size_t>> mem(10);
+        std::vector<std::pair<void*, size_t>> mem(countTest);
         {
             std::random_device rd;
             std::mt19937 gen(rd());
@@ -848,7 +858,7 @@ bool Test_7()
         mem::u64 allocateTime = 0;
         mem::u64 deallocateTime = 0;
 
-        std::vector<std::pair<void*, size_t>> mem(10);
+        std::vector<std::pair<void*, size_t>> mem(countTest);
         {
             std::random_device rd;
             std::mt19937 gen(rd());
