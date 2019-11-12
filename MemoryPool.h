@@ -6,8 +6,8 @@
 #include <list>
 #include <map>
 
-#define DEBUG_MEMORY 0
-#define ENABLE_STATISTIC 0
+#define DEBUG_MEMORY 1
+#define ENABLE_STATISTIC 1
 
 #ifdef new
 #   undef new
@@ -242,7 +242,9 @@ namespace mem
             Block* erase(Block* block)
             {
                 link(block->_prev, block->_next);
-
+#if DEBUG_MEMORY
+                block->reset();
+#endif
                 --_size;
                 assert(_size >= 0);
 

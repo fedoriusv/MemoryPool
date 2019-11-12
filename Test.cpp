@@ -10,6 +10,7 @@
 #include <random>
 #include <iostream>
 #include <chrono>
+#include <type_traits>
 
 #if DEBUG
 #   define TEST(x) assert(x)
@@ -27,7 +28,7 @@ public:
 
     mem::address_ptr allocate(mem::u64 size, mem::u32 aligment = 0, void* user = nullptr) override
     {
-        LPVOID ptr = VirtualAlloc(NULL, size, MEM_COMMIT, PAGE_READWRITE);
+        LPVOID ptr = VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
         assert(ptr);
 
         return ptr;
@@ -49,7 +50,88 @@ WinMemoryAllocator g_allocator;
 
 bool Test_0()
 {
-    std::cout << "-----------------Test_0 (Small Allocation. Compare)-----------------" << std::endl;
+    std::cout << "----------------Test_0 (Small Allocation. Base)-----------------" << std::endl;
+
+    mem::MemoryPool pool(g_pageSize, &g_allocator);
+
+    {
+        void* a = pool.allocMemory(sizeof(int));
+        assert(a != nullptr);
+        int* c = reinterpret_cast<int*>(a);
+        *c = 10;
+
+        void* b = pool.allocMemory(sizeof(int));
+        assert(b != nullptr);
+        int* d = reinterpret_cast<int*>(b);
+        *d = 11;
+        assert(*(int*)a == 10);
+        assert(*(int*)b == 11);
+        std::cout << "After Create" << std::endl;
+        pool.collectStatistic();
+
+        pool.freeMemory(a);
+        pool.freeMemory(b);
+        std::cout << "After Destroy" << std::endl;
+        pool.collectStatistic();
+        assert(true);
+    }
+
+    {
+        int* a = pool.allocElement<int>();
+        assert(a != nullptr);
+        *a = 10;
+        assert(*a == 10);
+        std::cout << "After Create" << std::endl;
+        pool.collectStatistic();
+
+        pool.freeMemory(a);
+        std::cout << "After Destroy" << std::endl;
+        pool.collectStatistic();
+    }
+
+    {
+        struct A
+        {
+            char a;
+            int b;
+            double c;
+        };
+
+        A* a = pool.allocElement<A>();
+        assert(a != nullptr);
+        memset(a, 0, sizeof(A));
+        std::cout << "After Create" << std::endl;
+        pool.collectStatistic();
+
+        pool.freeMemory(a);
+        std::cout << "After Destroy" << std::endl;
+        pool.collectStatistic();
+    }
+
+    {
+        int count = 10;
+        int* a = pool.allocArray<int>(count);
+        for (int i = 0; i < count; ++i)
+        {
+            assert(&a[i] != nullptr);
+        }
+        std::cout << "After Create" << std::endl;
+        pool.collectStatistic();
+
+        pool.freeMemory(a);
+        std::cout << "After Destroy" << std::endl;
+        pool.collectStatistic();
+    }
+    std::cout << "After Destroy All" << std::endl;
+    pool.collectStatistic();
+
+    std::cout << "----------------Test_0 END-----------------" << std::endl;
+    return true;
+}
+
+bool Test_1()
+{
+    std::cout << "-----------------Test_1 (Small Allocation. Compare)-----------------" << std::endl;
 
     //create seq 32k allcation increase size, after that randomly delete it
     std::vector<std::pair<void*, size_t>> mem(32'768);
@@ -124,87 +206,6 @@ bool Test_0()
 
         std::cout << "STD malloc: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
     }
-
-    std::cout << "----------------Test_0 END-----------------" << std::endl;
-    return true;
-}
-
-bool Test_1()
-{
-    std::cout << "----------------Test_1 (Small Allocation. Base)-----------------" << std::endl;
-
-    mem::MemoryPool pool(g_pageSize, &g_allocator);
-
-    {
-        void* a = pool.allocMemory(sizeof(int));
-        assert(a != nullptr);
-        int* c = reinterpret_cast<int*>(a);
-        *c = 10;
-
-        void* b = pool.allocMemory(sizeof(int));
-        assert(b != nullptr);
-        int* d = reinterpret_cast<int*>(b);
-        *d = 11;
-        assert(*(int*)a == 10);
-        assert(*(int*)b == 11);
-        std::cout << "After Create" << std::endl;
-        pool.collectStatistic();
-
-        pool.freeMemory(a);
-        pool.freeMemory(b);
-        std::cout << "After Destroy" << std::endl;
-        pool.collectStatistic();
-        assert(true);
-    }
-
-    {
-        int* a = pool.allocElement<int>();
-        assert(a != nullptr);
-        *a = 10;
-        assert(*a == 10);
-        std::cout << "After Create" << std::endl;
-        pool.collectStatistic();
-
-        pool.freeMemory(a);
-        std::cout << "After Destroy" << std::endl;
-        pool.collectStatistic();
-    }
-
-    {
-        struct A
-        {
-            char a;
-            int b;
-            double c;
-        };
-
-        A* a = pool.allocElement<A>();
-        assert(a != nullptr);
-        memset(a, 0, sizeof(A));
-        std::cout << "After Create" << std::endl;
-        pool.collectStatistic();
-
-        pool.freeMemory(a);
-        std::cout << "After Destroy" << std::endl;
-        pool.collectStatistic();
-    }
-
-    {
-        int count = 10;
-        int* a = pool.allocArray<int>(count);
-        for (int i = 0; i < count; ++i)
-        {
-            assert(&a[i] != nullptr);
-        }
-        std::cout << "After Create" << std::endl;
-        pool.collectStatistic();
-
-        pool.freeMemory(a);
-        std::cout << "After Destroy" << std::endl;
-        pool.collectStatistic();
-    }
-    std::cout << "After Destroy All" << std::endl;
-    pool.collectStatistic();
 
     std::cout << "----------------Test_1 END-----------------" << std::endl;
     return true;
@@ -430,13 +431,59 @@ bool Test_3()
 
 bool Test_4()
 {
-    std::cout << "----------------Test_4 (Medium allocation)-----------------" << std::endl;
+    std::cout << "----------------Test_4 (Medium allocation. Content test)-----------------" << std::endl;
+
+    mem::MemoryPool pool(g_pageSize, &g_allocator);
+
+    size_t size = 50'000;
+    assert(g_pageSize > size);
+    const size_t countSize = 40;
+    void* ptrPool[countSize] = {};
+    void* ptrMalloc[countSize] = {};
+
+
+    for (size_t i = 0; i < countSize; ++i)
+    {
+        ptrPool[i] = pool.allocMemory(size);
+        assert(ptrPool[i] != nullptr);
+        memset(ptrPool[i], (int)i, size);
+
+        ptrMalloc[i] = malloc(size);
+        assert(ptrMalloc[i] != nullptr);
+        memset(ptrMalloc[i], (int)i, size);
+    }
+    pool.collectStatistic();
+
+    for (size_t i = 0; i < countSize; ++i)
+    {
+        if (memcmp(ptrPool[i], ptrMalloc[i], size) != 0)
+        {
+            return false;
+        }
+    }
+
+    for (size_t i = 0; i < countSize; ++i)
+    {
+        free(ptrMalloc[i]);
+        pool.freeMemory(ptrPool[i]);
+    }
+    pool.collectStatistic();
+
+    std::cout << "----------------Test_4 END-----------------" << std::endl;
+    return true;
+}
+
+
+
+bool Test_5()
+{
+    std::cout << "----------------Test_5 (Medium allocation. Compare)-----------------" << std::endl;
 
     //create 32k-64k rendom allcation increase size, after that randomly delete it
     mem::MemoryPool pool(g_pageSize, &g_allocator);
 
     const size_t minMallocSize = 32'736;
-    const size_t maxMallocSize = g_pageSize - 1;  //64 KB
+    const size_t maxMallocSize = g_pageSize;  //64 KB
 
     const size_t testSize = 32'000;
     std::vector<std::pair<void*, size_t>> mem(testSize);
@@ -522,20 +569,226 @@ bool Test_4()
         std::cout << "STD malloc: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
     }
 
-    std::cout << "----------------Test_4 END-----------------" << std::endl;
-    return true;
-}
-
-bool Test_5()
-{
-    std::cout << "----------------Test_5 (Medium allocation)-----------------" << std::endl;
     std::cout << "----------------Test_5 END-----------------" << std::endl;
     return true;
 }
 
 bool Test_6()
 {
-    std::cout << "----------------Test_6 (Medium allocation)-----------------" << std::endl;
+    std::cout << "----------------Test_6 (Medium allocation. Compare Random Alloc/Dealloc memory)-----------------" << std::endl;
+
+    mem::MemoryPool pool(g_pageSize, &g_allocator);
+
+    const size_t minMallocSize = 32'736;
+    const size_t maxMallocSize = g_pageSize;
+
+    const int countEvents = 10000;
+    std::vector<std::tuple<int, size_t, size_t>> events;
+
+    //generate event
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<size_t> eventDst(0, 1000);
+
+    std::vector<size_t> eventElements;
+    for (size_t i = 0; i < countEvents; ++i)
+    {
+        int id = eventDst(gen) % 4;
+        switch (id)
+        {
+        case 0: //create
+        case 1:
+        {
+            static int counter = 0;
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<size_t> dst(minMallocSize, maxMallocSize);
+
+            size_t size = dst(gen);
+            events.push_back({ 0, counter, size });
+            eventElements.push_back(counter);
+            ++counter;
+        }
+        break;
+
+        case 2: //delete
+        {
+            if (eventElements.size() < 10)
+            {
+                break;
+            }
+
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<size_t> dst(0, eventElements.size() - 1);
+
+            size_t index = dst(gen);
+
+            events.push_back({ 1, index, eventElements[index] });
+            eventElements.erase(std::next(eventElements.begin(), index));
+        }
+        break;
+
+        case 3: //memcpy
+        case 4:
+        {
+            if (eventElements.empty())
+            {
+                break;
+            }
+
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<size_t> dst(0, eventElements.size() - 1);
+
+            size_t index = dst(gen);
+
+            events.push_back({ 2, index, eventElements[index] });
+        }
+        break;
+
+        default:
+        {
+            int t = 0;
+        }
+        }
+    }
+
+    //pool
+    {
+        mem::u64 allocateTime = 0;
+        mem::u64 deallocateTime = 0;
+
+        std::vector<std::pair<void*, size_t>> pointers;
+
+        for (size_t i = 0; i < events.size(); ++i)
+        {
+            switch (std::get<0>(events[i]))
+            {
+            case 0: //create
+            {
+                size_t size = std::get<2>(events[i]);
+                auto startTime = std::chrono::high_resolution_clock::now();
+                void* ptr = pool.allocMemory(size);
+                auto endTime = std::chrono::high_resolution_clock::now();
+                allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+                assert(ptr);
+
+                pointers.push_back({ ptr, size });
+            }
+            break;
+
+            case 1: //delete
+            {
+                int index = std::get<2>(events[i]);
+                void* ptr = pointers[index].first;
+                assert(ptr);
+                auto startTime = std::chrono::high_resolution_clock::now();
+                pool.freeMemory(ptr);
+                auto endTime = std::chrono::high_resolution_clock::now();
+                deallocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+
+                pointers[index].first = nullptr;
+            }
+            break;
+
+            case 2:
+            {
+                int index = std::get<2>(events[i]);
+                void* ptr = pointers[index].first;
+                size_t size = pointers[index].second;
+                assert(ptr);
+
+                memset(ptr, index, size);
+            }
+            break;
+            }
+        }
+
+        for (size_t i = 0; i < pointers.size(); ++i)
+        {
+            if (pointers[i].first)
+            {
+                void* ptr = pointers[i].first;
+                assert(ptr);
+                auto startTime = std::chrono::high_resolution_clock::now();
+                pool.freeMemory(ptr);
+                auto endTime = std::chrono::high_resolution_clock::now();
+                deallocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+            }
+        }
+
+        pool.collectStatistic();
+        std::cout << "POOL stat: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
+    }
+
+    //malloc
+    {
+        mem::u64 allocateTime = 0;
+        mem::u64 deallocateTime = 0;
+
+        std::vector<std::pair<void*, size_t>> pointers;
+
+        for (size_t i = 0; i < events.size(); ++i)
+        {
+            switch (std::get<0>(events[i]))
+            {
+            case 0: //create
+            {
+                size_t size = std::get<2>(events[i]);
+                auto startTime = std::chrono::high_resolution_clock::now();
+                void* ptr = malloc(size);
+                auto endTime = std::chrono::high_resolution_clock::now();
+                allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+                assert(ptr);
+
+                pointers.push_back({ ptr, size });
+            }
+            break;
+
+            case 1: //delete
+            {
+                int index = std::get<2>(events[i]);
+                void* ptr = pointers[index].first;
+                assert(ptr);
+                auto startTime = std::chrono::high_resolution_clock::now();
+                free(ptr);
+                auto endTime = std::chrono::high_resolution_clock::now();
+                deallocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+
+                pointers[index].first = nullptr;
+            }
+            break;
+
+            case 2:
+            {
+                int index = std::get<2>(events[i]);
+                void* ptr = pointers[index].first;
+                size_t size = pointers[index].second;
+                assert(ptr);
+
+                memset(ptr, index, size);
+            }
+            break;
+            }
+        }
+
+        for (size_t i = 0; i < pointers.size(); ++i)
+        {
+            if (pointers[i].first)
+            {
+                void* ptr = pointers[i].first;
+                assert(ptr);
+                auto startTime = std::chrono::high_resolution_clock::now();
+                free(ptr);
+                auto endTime = std::chrono::high_resolution_clock::now();
+                deallocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+            }
+        }
+
+        std::cout << "Malloc/free stat: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
+    }
+
     std::cout << "----------------Test_6 END-----------------" << std::endl;
     return true;
 }
@@ -783,9 +1036,9 @@ int main()
     TEST(Test_1());
     TEST(Test_2());
     TEST(Test_3());
-   /* TEST(Test_4());
-    TEST(Test_5());
-    TEST(Test_6());*/
+    TEST(Test_4());
+    //TEST(Test_5());
+    TEST(Test_6());
     TEST(Test_7());
     //TEST(Test_8());
 
