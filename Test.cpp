@@ -491,52 +491,56 @@ bool Test_5()
     //create 32k-64k rendom allcation increase size, after that randomly delete it
     mem::MemoryPool pool(g_pageSize, &g_allocator);
 
-    const size_t minMallocSize = 32'736;
+    const size_t minMallocSize = 32'769;
     const size_t maxMallocSize = g_pageSize;  //64 KB
 
     const size_t testSize = 32'000;
-    std::vector<std::pair<void*, size_t>> mem(testSize);
+    std::vector<std::pair<size_t, size_t>> sizes(testSize);
     {
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<size_t> dis(minMallocSize, maxMallocSize);
 
-        for (size_t i = 0; i < mem.size(); ++i)
+        for (size_t i = 0; i < sizes.size(); ++i)
         {
             size_t sz = dis(gen);
-            mem[i] = { nullptr, sz };
+            sizes[i] = { i, sz };
         }
+    }
+
+    std::vector<std::pair<size_t, size_t>> sizesShuffle(testSize);
+    {
+        std::copy(sizes.begin(), sizes.end(), sizesShuffle.begin());
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::shuffle(sizesShuffle.begin(), sizesShuffle.end(), gen);
     }
 
     {
         mem::u64 allocateTime = 0;
         mem::u64 deallocateTime = 0;
 
-        for (size_t i = 0; i < mem.size(); ++i)
+        std::vector<void*> pointers(testSize);
+        for (size_t i = 0; i < sizes.size(); ++i)
         {
             auto startTime0 = std::chrono::high_resolution_clock::now();
-            void* ptr = pool.allocMemory(mem[i].second);
+            void* ptr = pool.allocMemory(sizes[i].second);
             auto endTime0 = std::chrono::high_resolution_clock::now();
             allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime0 - startTime0).count();
 
             assert(ptr != nullptr);
-            memset(ptr, (int)i, mem[i].second);
-            mem[i].first = ptr;
+            memset(ptr, (int)i, sizes[i].second);
+            pointers[i] = ptr;
         }
         pool.collectStatistic();
 
-        std::vector<std::pair<void*, size_t>> memSuffle(testSize);
-        std::copy(mem.begin(), mem.end(), memSuffle.begin());
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::shuffle(memSuffle.begin(), memSuffle.end(), gen);
-
-        for (size_t i = 0; i < memSuffle.size(); ++i)
+        for (size_t i = 0; i < sizesShuffle.size(); ++i)
         {
-            auto& val = memSuffle[i];
-            assert(val.first != nullptr);
+            auto& val = sizesShuffle[i];
+            void* ptr = pointers[val.first];
+            assert(ptr != nullptr);
             auto startTime1 = std::chrono::high_resolution_clock::now();
-            pool.freeMemory(val.first);
+            pool.freeMemory(ptr);
             auto endTime1 = std::chrono::high_resolution_clock::now();
             deallocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime1 - startTime1).count();
         }
@@ -548,31 +552,28 @@ bool Test_5()
         mem::u64 allocateTime = 0;
         mem::u64 deallocateTime = 0;
 
-        for (size_t i = 0; i < mem.size(); ++i)
+        std::vector<void*> pointers(testSize);
+        for (size_t i = 0; i < sizes.size(); ++i)
         {
-            auto startTime = std::chrono::high_resolution_clock::now();
-            void* ptr = malloc(mem[i].second);
-            auto endTime = std::chrono::high_resolution_clock::now();
-            allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+            auto startTime0 = std::chrono::high_resolution_clock::now();
+            void* ptr = malloc(sizes[i].second);
+            auto endTime0 = std::chrono::high_resolution_clock::now();
+            allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime0 - startTime0).count();
 
             assert(ptr != nullptr);
-            memset(ptr, (int)i, mem[i].second);
-            mem[i].first = ptr;
+            memset(ptr, (int)i, sizes[i].second);
+            pointers[i] = ptr;
         }
 
-        std::vector<std::pair<void*, size_t>> memSuffle(testSize);
-        std::copy(mem.begin(), mem.end(), memSuffle.begin());
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::shuffle(memSuffle.begin(), memSuffle.end(), gen);
-
-        for (size_t i = 0; i < memSuffle.size(); ++i)
+        for (size_t i = 0; i < sizesShuffle.size(); ++i)
         {
-            assert(mem[i].first != nullptr);
-            auto startTime = std::chrono::high_resolution_clock::now();
-            free(memSuffle[i].first);
-            auto endTime = std::chrono::high_resolution_clock::now();
-            deallocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+            auto& val = sizesShuffle[i];
+            void* ptr = pointers[val.first];
+            assert(ptr != nullptr);
+            auto startTime1 = std::chrono::high_resolution_clock::now();
+            free(ptr);
+            auto endTime1 = std::chrono::high_resolution_clock::now();
+            deallocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime1 - startTime1).count();
         }
 
         std::cout << "STD malloc: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
@@ -918,7 +919,7 @@ bool Test_8()
 
     std::vector<std::pair<size_t, void*>> sizesPool;
     std::vector<void*> sizesDefault;
- 
+
     const size_t countAllocation = 1000;
     for (size_t i = 0; i < countAllocation; ++i)
     {
@@ -926,7 +927,6 @@ bool Test_8()
         sizesPool.push_back(std::make_pair(sz, nullptr));
     }
 
-    //TODO
     for (auto& size : sizesPool)
     {
         size.second = pool.allocMemory(size.first);
@@ -991,7 +991,7 @@ int main()
     TEST(Test_2());
     TEST(Test_3());
     TEST(Test_4());
-    //TEST(Test_5());
+    TEST(Test_5());
     TEST(Test_6());
     TEST(Test_7());
     //TEST(Test_8());

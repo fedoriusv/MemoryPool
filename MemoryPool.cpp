@@ -6,6 +6,23 @@
 #include <algorithm>
 #include <iostream>
 #include <stdlib.h>
+#include <type_traits>
+
+#ifdef new
+#   undef new
+#endif
+
+#ifdef delete
+#   undef delete
+#endif 
+
+#ifdef malloc
+#   undef malloc
+#endif
+
+#ifdef free
+#   undef free
+#endif
 
 namespace mem
 {
@@ -312,10 +329,10 @@ namespace mem
             if (k_deleteUnusedPools)
             {
                 bool skip = true;
-                std::list<Pool*>& pools = const_cast<std::list<Pool*>&>(pool->_table->_pools);
+                auto& pools = const_cast<decltype(pool->_table->_pools)&>(pool->_table->_pools);
 
                 m_markedToDelete.clear();
-                for (std::list<Pool*>::iterator iter = pools.begin(); iter != pools.end();)
+                for (auto iter = pools.begin(); iter != pools.end();)
                 {
                     if ((*iter)->_used.empty())
                     {
@@ -363,40 +380,7 @@ namespace mem
 
             if (k_deleteUnusedPools)
             {
-                bool skip = true;
-                std::list<Pool*>& pools = const_cast<std::list<Pool*>&>(pool->_table->_pools);
-
-                m_markedToDelete.clear();
-                for (std::list<Pool*>::iterator iter = pools.begin(); iter != pools.end();)
-                {
-                    if ((*iter)->_used.empty())
-                    {
-                        if (skip) //skip first
-                        {
-                            skip = false;
-                        }
-                        else
-                        {
-                            m_markedToDelete.push_back(*iter);
-                            iter = pools.erase(iter);
-
-                            continue;
-                        }
-                    }
-                    ++iter;
-                }
-
-                if (m_markedToDelete.size() > 0)
-                {
-                    for (auto& pool : m_markedToDelete)
-                    {
-#if ENABLE_STATISTIC
-                        m_statistic.registerPoolDeallocation<1>(pool->_poolSize);
-#endif //ENABLE_STATISTIC
-                        MemoryPool::deallocatePool(pool);
-                    }
-                    m_markedToDelete.clear();
-                }
+                deleteEmptyPools();
             }
         }
     }
@@ -497,11 +481,52 @@ namespace mem
         }
 
         pool->_free.erase(block);
-        pool->_used.priorityInsert(block);
+        pool->_used.insert(block);
         pool->_blockSize += block->_size;
         assert(pool->_blockSize <= pool->_poolSize);
 
         return block;
+    }
+
+    void MemoryPool::deleteEmptyPools()
+    {
+        bool skip = true;
+        m_markedToDelete.clear();
+
+        auto& pools = m_poolTable._pools;
+        for (size_t i = 0; i < pools.size();)
+        {
+            if (pools[i]->_used.empty())
+            {
+                if (skip) //skip first
+                {
+                    skip = false;
+                }
+                else
+                {
+                    m_markedToDelete.push_back(pools[i]);
+
+                    auto lastIter = pools.rbegin();
+                    std::swap(pools[i], *lastIter);
+                    pools.pop_back();
+
+                    continue;
+                }
+            }
+            ++i;
+        }
+
+        if (m_markedToDelete.size() > 0)
+        {
+            for (auto& pool : m_markedToDelete)
+            {
+#if ENABLE_STATISTIC
+                m_statistic.registerPoolDeallocation<1>(pool->_poolSize);
+#endif //ENABLE_STATISTIC
+                MemoryPool::deallocatePool(pool);
+            }
+            m_markedToDelete.clear();
+        }
     }
 
     void MemoryPool::collectStatistic()

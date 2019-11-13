@@ -9,14 +9,6 @@
 #define DEBUG_MEMORY 0
 #define ENABLE_STATISTIC 0
 
-#ifdef new
-#   undef new
-#endif
-
-#ifdef delete
-#   undef delete
-#endif 
-
 namespace mem
 {
     typedef unsigned short      u16;
@@ -259,14 +251,14 @@ namespace mem
                 return block->_next;
             }
 
-            inline bool empty() const
+            bool empty() const
             {
                 return &_end == _end._next;
             }
 
         private:
 
-            inline void link(Block* l, Block* r)
+            void link(Block* l, Block* r)
             {
                 l->_next = r;
                 r->_prev = l;
@@ -344,9 +336,9 @@ namespace mem
             {
             }
 
-            u64              _size;
-            Type             _type;
-            std::list<Pool*> _pools;
+            u64                 _size;
+            Type                _type;
+            std::vector<Pool*> _pools;
         };
 
         static const u64 k_countPagesPerAllocation = 16;
@@ -364,7 +356,6 @@ namespace mem
 
         static MemoryAllocator* s_defaultMemoryAllocator;
 
-        std::vector<Pool*>      m_markedToDelete;
 
         Pool*   allocateFixedBlocksPool(PoolTable* table, u32 align);
         Pool*   allocatePool(PoolTable* table, u32 align);
@@ -376,7 +367,9 @@ namespace mem
         Block* allocateFromSmallTables(u64 size);
         Block* allocateFromTable(u64 size);
 
+        void deleteEmptyPools();
         const bool k_deleteUnusedPools;
+        std::vector<Pool*>      m_markedToDelete;
 
 #if ENABLE_STATISTIC
         struct Statistic
