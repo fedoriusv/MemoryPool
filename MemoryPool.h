@@ -88,7 +88,12 @@ namespace mem
         void preAllocatePools();
 
         /*
-        * Free pool, Return all requested allocation
+        * Reset pools, Return all requested allocation
+        */
+        void reset();
+
+        /*
+        * Free pool, delete all pools
         */
         void clear();
 
@@ -107,19 +112,16 @@ namespace mem
         struct Pool;
         struct PoolTable;
 
-        struct Block
+        template<class T>
+        struct Node
         {
-            Block() noexcept
-                : _pool(nullptr)
+            Node<T>() noexcept
+                : _prev(nullptr)
                 , _next(nullptr)
-                , _prev(nullptr)
-                , _size(0)
-#if DEBUG_MEMORY
-                , _ptr(nullptr)
-#endif //DEBUG_MEMORY
             {
-
             }
+
+            Node<T>(const Node<T>&) = default;
 
             void reset()
             {
@@ -127,9 +129,146 @@ namespace mem
                 _prev = nullptr;
             }
 
+            T* _prev;
+            T* _next;
+        };
+
+        template<class T>
+        class List final
+        {
+        public:
+
+            List() noexcept
+            {
+                List<T>::clear();
+            }
+
+            List(const List<T>&) = default;
+            ~List() = default;
+
+            T* begin()
+            {
+                return _end._next;
+            }
+
+            T* end()
+            {
+                return &_end;
+            }
+
+            bool empty() const
+            {
+                return &_end == _end._next;
+            }
+
+            void clear()
+            {
+                link(&_end, &_end);
+#if DEBUG_MEMORY
+                _size = 0;
+#endif
+            }
+
+            void priorityInsert(T* node)
+            {
+                T* current = begin();
+                while (current != end())
+                {
+                    if (node < current)
+                    {
+                        link(current->_prev, node);
+                        link(node, current);
+#if DEBUG_MEMORY
+                        ++_size;
+#endif
+                        return;
+                    }
+                    current = current->_next;
+                }
+
+                link(_end._prev, node);
+                link(node, &_end);
+#if DEBUG_MEMORY
+                ++_size;
+#endif
+            }
+
+            void insert(T* node)
+            {
+                link(_end._prev, node);
+                link(node, &_end);
+#if DEBUG_MEMORY
+                ++_size;
+#endif
+            }
+
+            void merge()
+            {
+                if (List<T>::empty())
+                {
+                    return;
+                }
+
+                T* node = List<T>::begin();
+                T* nodeNext = List<T>::begin()->_next;
+                while (nodeNext != List<T>::end())
+                {
+                    address_ptr ptrNext = (address_ptr)(reinterpret_cast<u64>(node->ptr()) + node->_size);
+                    if (nodeNext == ptrNext)
+                    {
+                        node->_size += nodeNext->_size;
+                        nodeNext = List<T>::erase(nodeNext);
+
+                        continue;
+                    }
+
+                    node = node->_next;
+                    nodeNext = nodeNext->_next;
+                }
+            }
+
+            T* erase(T* node)
+            {
+                link(node->_prev, node->_next);
+#if DEBUG_MEMORY
+                --_size;
+                assert(_size >= 0);
+#endif
+
+                return node->_next;
+            }
+
+        private:
+
+            void link(T* l, T* r)
+            {
+                l->_next = r;
+                r->_prev = l;
+            }
+
+            T   _end;
+#if DEBUG_MEMORY
+            s64 _size;
+#endif
+        };
+
+        struct Block : Node<Block>
+        {
+            Block()
+                : _pool(nullptr)
+                , _size(0)
+            {
+            }
+            
+            Block(const Block&) = default;
+
+            Block(Pool* pool, u64 size) noexcept
+                : _pool(pool)
+                , _size(size)
+            {
+            }
+
             Pool*       _pool;
-            Block*      _next;
-            Block*      _prev;
             u64         _size;
 #if DEBUG_MEMORY
             address_ptr _ptr;
@@ -145,135 +284,31 @@ namespace mem
                 return reinterpret_cast<address_ptr>(reinterpret_cast<u64>(this) + sizeof(Block));
 #endif
             }
+
+            bool compare(Block* block)
+            {
+                address_ptr ptrNext = reinterpret_cast<address_ptr>(reinterpret_cast<u64>(block->ptr()) + block->_size);
+                if (ptrNext == block)
+                {
+                    return true;
+                }
+
+                return false;
+            }
         };
 
-        class BlockList
+        struct Pool : Node<Pool>
         {
-        public:
-
-            BlockList() noexcept
-#if DEBUG_MEMORY
-                 : _size(0)
-#endif
+            Pool()
+                : _table(nullptr)
+                , _blockSize(0)
+                , _poolSize(0)
             {
-                clear();
+                _used.clear();
+                _free.clear();
             }
-
-            ~BlockList()
-            {
-            }
-
-            Block* begin()
-            {
-                return _end._next;
-            }
-
-            Block* end()
-            {
-                return &_end;
-            }
-
-            void clear()
-            {
-                link(&_end, &_end);
-#if DEBUG_MEMORY
-                _size = 0;
-#endif
-            }
-
-            void priorityInsert(Block* block)
-            {
-                Block* current = begin();
-                while (current != end())
-                {
-                    if (block < current)
-                    {
-                        link(current->_prev, block);
-                        link(block, current);
-#if DEBUG_MEMORY
-                        ++_size;
-#endif
-                        return;
-                    }
-                    current = current->_next;
-                }
-
-                link(_end._prev, block);
-                link(block, &_end);
-#if DEBUG_MEMORY
-                ++_size;
-#endif
-            }
-
-            void insert(Block* block)
-            {
-                link(_end._prev, block);
-                link(block, &_end);
-#if DEBUG_MEMORY
-                ++_size;
-#endif
-            }
-
-            void merge()
-            {
-                if (empty())
-                {
-                    return;
-                }
-
-                Block* block = begin();
-                Block* blockNext = begin()->_next;
-                while (blockNext != end())
-                {
-                    address_ptr ptrNext = (address_ptr)(reinterpret_cast<u64>(block->ptr()) + block->_size);
-                    if (blockNext == ptrNext)
-                    {
-                        block->_size += blockNext->_size;
-                        blockNext = erase(blockNext);
-
-                        continue;
-                    }
-
-                    block = block->_next;
-                    blockNext = blockNext->_next;
-                }
-            }
-
-            Block* erase(Block* block)
-            {
-                link(block->_prev, block->_next);
-#if DEBUG_MEMORY
-                block->reset();
-                --_size;
-                assert(_size >= 0);
-#endif
-
-                return block->_next;
-            }
-
-            bool empty() const
-            {
-                return &_end == _end._next;
-            }
-
-        private:
-
-            void link(Block* l, Block* r)
-            {
-                l->_next = r;
-                r->_prev = l;
-            }
-
-            Block   _end;
-#if DEBUG_MEMORY
-            s32     _size;
-#endif
-        };
-
-        struct Pool
-        {
-            Pool() = delete;
-            Pool(const Pool&) = delete;
+            
+            Pool(const Pool&) = default;
 
             Pool(PoolTable const* table, u64 blockSize, u64 poolSize) noexcept
                 : _table(table)
@@ -284,7 +319,7 @@ namespace mem
                 _free.clear();
             }
 
-            address_ptr block() const
+            address_ptr ptr() const
             {
 #if DEBUG_MEMORY
                 u64 offset = sizeof(Pool);
@@ -301,10 +336,10 @@ namespace mem
                 Block* block = _used.begin();
                 while (block != _used.end())
                 {
-                    Block* newxBlock = block->_next;
+                    Block* newBlock = block->_next;
                     _free.insert(block);
 
-                    block = newxBlock;
+                    block = newBlock;
                 }
                 _used.clear();
             }
@@ -312,8 +347,8 @@ namespace mem
             PoolTable const*    _table;
             u64                 _blockSize;
             const u64           _poolSize;
-            BlockList           _used;
-            BlockList           _free;
+            List<Block>         _used;
+            List<Block>         _free;
         };
 
         struct PoolTable
@@ -330,15 +365,24 @@ namespace mem
             {
             }
 
-            PoolTable(u64 size, PoolTable::Type type) noexcept
+            PoolTable(const PoolTable& table)
+                : _size(0)
+                , _type(Type::Default)
+            {
+                //wrong runtime logic, but need for compile
+                assert(false);
+            }
+
+            explicit PoolTable(u16 size, PoolTable::Type type) noexcept
                 : _size(size)
                 , _type(Type::Default)
             {
             }
 
-            u64                 _size;
-            Type                _type;
-            std::vector<Pool*> _pools;
+            List<Pool>  _activePools;
+            List<Pool>  _fullPools;
+            u64         _size;
+            Type        _type;
         };
 
         static const u64 k_countPagesPerAllocation = 16;
@@ -352,7 +396,7 @@ namespace mem
         const u64               k_pageSize;
         const u64               k_maxSizePoolAllocation;
 
-        BlockList               m_largeAllocations;
+        List<Block>             m_largeAllocations;
 
         static MemoryAllocator* s_defaultMemoryAllocator;
 
@@ -367,9 +411,9 @@ namespace mem
         Block* allocateFromSmallTables(u64 size);
         Block* allocateFromTable(u64 size);
 
-        void deleteEmptyPools();
+        void collectEmptyPools(List<Pool>& pools, std::vector<Pool*>& markedToDelete);
         const bool k_deleteUnusedPools;
-        std::vector<Pool*>      m_markedToDelete;
+        std::vector<Pool*> m_markedToDelete;
 
 #if ENABLE_STATISTIC
         struct Statistic
