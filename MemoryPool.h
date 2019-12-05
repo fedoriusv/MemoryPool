@@ -43,6 +43,8 @@ namespace mem
             virtual void        deallocate(address_ptr memory, u64 size = 0, void* user = nullptr) = 0;
         };
 
+        static constexpr u64 k_mixSizePageSize = 65'536;
+
         /*
         * MemoryPool constuctor
         * param pageSize : page size (best size 65KB, but no more)

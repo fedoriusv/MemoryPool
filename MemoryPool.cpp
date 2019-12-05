@@ -60,8 +60,7 @@ namespace mem
 
         , k_deleteUnusedPools(true)
     {
-
-        assert(k_pageSize >= 65'536);
+        assert(k_pageSize >= k_mixSizePageSize);
         m_smallTableIndex.fill(0);
         m_smallPoolTables.resize(s_smallBlockTableSizes.size());
 
