@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.4.1)
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 set (CURRENT_PROJECT "MemoryPoolTest")
 project(${CURRENT_PROJECT})
@@ -19,6 +20,15 @@ file(GLOB TEST_FILES Test.cpp)
 
 source_group("" FILES ${SOURCE_FILES} ${TEST_FILES})
 
+#mimalloc
+add_subdirectory(Libs/mimalloc)
+set_target_properties(mimalloc PROPERTIES FOLDER Libs/mimalloc)
+set_target_properties(mimalloc-static PROPERTIES FOLDER Libs/mimalloc)
+set_target_properties(mimalloc-obj PROPERTIES FOLDER Libs/mimalloc)
+set_target_properties(mimalloc-test-api PROPERTIES FOLDER Libs/mimalloc)
+set_target_properties(mimalloc-test-stress PROPERTIES FOLDER Libs/mimalloc)
+
+
 if (TARGET_WINDOWS)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:CONSOLE")
     add_executable(${CURRENT_PROJECT} WIN32 ${SOURCE_FILES}	${TEST_FILES})
@@ -27,3 +37,7 @@ elseif (TARGET_ANDROID)
     add_library(${CURRENT_PROJECT} SHARED ${SOURCE_FILES} ${TEST_FILES} ${ANDROID_NATIVE_FILES})
     target_link_libraries(${CURRENT_PROJECT} log android)
 endif()
+
+#mimalloc
+target_link_libraries(${CURRENT_PROJECT} mimalloc-static)
+add_dependencies(${CURRENT_PROJECT} mimalloc-static)
