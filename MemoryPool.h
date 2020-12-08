@@ -173,6 +173,7 @@ namespace mem
 
             void priorityInsert(T* node)
             {
+                //TODO use binary search
                 T* current = begin();
                 while (current != end())
                 {

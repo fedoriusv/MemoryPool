@@ -404,7 +404,6 @@ namespace mem
 
             if (k_deleteUnusedPools)
             {
-                bool skip = true;
                 auto& pools = const_cast<decltype(pool->_table->_activePools)&>(pool->_table->_activePools);
 
                 collectEmptyPools(pools, m_markedToDelete);
