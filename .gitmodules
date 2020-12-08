@@ -1,4 +1,0 @@
-[submodule "Libs/mimalloc"]
-	path = Libs/mimalloc
-	url = https://github.com/microsoft/mimalloc.git
-	branch = master
