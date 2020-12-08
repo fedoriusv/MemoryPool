@@ -1025,7 +1025,7 @@ bool Test_9()
 {
     std::cout << "----------------Test_9 (Large Allocation. 2 alloc many times)-----------------" << std::endl;
 
-    const size_t countIter = 1'000;
+    const size_t countIter = 100;
 
     const size_t maxMallocSize = 1024 * 1024 * 512;
     std::random_device rd;
@@ -1033,36 +1033,6 @@ bool Test_9()
     std::uniform_int_distribution<> dis(g_pageSize, maxMallocSize);
     size_t size1 = 0;
     size_t size2 = 0;
-
-    {
-        mem::u64 allocateTime = 0;
-        mem::u64 deallocateTime = 0;
-
-        for (size_t i = 0; i < countIter; ++i)
-        {
-            size1 = dis(rd);
-            size2 = dis(rd);
-
-            auto startTime0 = std::chrono::high_resolution_clock::now();
-            void* volatile ptr1 = malloc(size1);
-            void* volatile ptr2 = malloc(size2);
-            auto endTime0 = std::chrono::high_resolution_clock::now();
-            allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime0 - startTime0).count();
-
-            assert(ptr1 != nullptr);
-            assert(ptr2 != nullptr);
-            memset(ptr1, (int)i, size1);
-            memset(ptr2, (int)i, size2);
-
-            auto startTime1 = std::chrono::high_resolution_clock::now();
-            free(ptr1);
-            free(ptr2);
-            auto endTime1 = std::chrono::high_resolution_clock::now();
-            deallocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime1 - startTime1).count();
-        }
-
-        std::cout << "STD malloc: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
-    }
 
     {
         mem::MemoryPool pool(g_pageSize, &g_allocator);
@@ -1095,6 +1065,36 @@ bool Test_9()
         }
         pool.collectStatistic();
         std::cout << "POOL stat: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
+    }
+
+    {
+        mem::u64 allocateTime = 0;
+        mem::u64 deallocateTime = 0;
+
+        for (size_t i = 0; i < countIter; ++i)
+        {
+            size1 = dis(rd);
+            size2 = dis(rd);
+
+            auto startTime0 = std::chrono::high_resolution_clock::now();
+            void* volatile ptr1 = malloc(size1);
+            void* volatile ptr2 = malloc(size2);
+            auto endTime0 = std::chrono::high_resolution_clock::now();
+            allocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime0 - startTime0).count();
+
+            assert(ptr1 != nullptr);
+            assert(ptr2 != nullptr);
+            memset(ptr1, (int)i, size1);
+            memset(ptr2, (int)i, size2);
+
+            auto startTime1 = std::chrono::high_resolution_clock::now();
+            free(ptr1);
+            free(ptr2);
+            auto endTime1 = std::chrono::high_resolution_clock::now();
+            deallocateTime += std::chrono::duration_cast<std::chrono::microseconds>(endTime1 - startTime1).count();
+        }
+
+        std::cout << "STD malloc: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
     }
 
     std::cout << "----------------Test_2 END-----------------" << std::endl;
