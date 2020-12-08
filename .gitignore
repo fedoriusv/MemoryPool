@@ -1,2 +1,4 @@
+build_windows/*
+build_android/*
 *.apk
 *.log
