@@ -51,7 +51,7 @@ namespace mem
         * param allocator: allocator
         * param user: user data
         */
-        explicit MemoryPool(u64 pageSize, MemoryAllocator* allocator = MemoryPool::getDefaultMemoryAllocator(), void* user = nullptr) noexcept;
+        explicit MemoryPool(u64 pageSize, MemoryAllocator* allocator = MemoryPool::getDefaultMemoryAllocator(), bool deleteUnusedPools = true, void* user = nullptr) noexcept;
 
         /*
         * ~MemoryPool destuctor
@@ -415,8 +415,9 @@ namespace mem
         Block* allocateFromTable(u64 size);
 
         void collectEmptyPools(List<Pool>& pools, std::vector<Pool*>& markedToDelete);
-        const bool k_deleteUnusedPools;
         std::vector<Pool*> m_markedToDelete;
+
+        const bool k_deleteUnusedPools;
 
 #if ENABLE_STATISTIC
         struct Statistic

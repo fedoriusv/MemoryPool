@@ -52,13 +52,13 @@ namespace mem
 
     MemoryPool::MemoryAllocator* MemoryPool::s_defaultMemoryAllocator = nullptr;
 
-    MemoryPool::MemoryPool(u64 pageSize, MemoryAllocator* allocator, void* user) noexcept
+    MemoryPool::MemoryPool(u64 pageSize, MemoryAllocator* allocator, bool deleteUnusedPools, void* user) noexcept
         : m_allocator(allocator)
         , m_userData(user)
         , k_pageSize(pageSize)
         , k_maxSizePoolAllocation(pageSize)
 
-        , k_deleteUnusedPools(true)
+        , k_deleteUnusedPools(deleteUnusedPools)
     {
         assert(k_pageSize >= k_mixSizePageSize);
         m_smallTableIndex.fill(0);
