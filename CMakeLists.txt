@@ -21,12 +21,13 @@ file(GLOB TEST_FILES Test.cpp)
 source_group("" FILES ${SOURCE_FILES} ${TEST_FILES})
 
 #mimalloc
-add_subdirectory(Libs/mimalloc)
-set_target_properties(mimalloc PROPERTIES FOLDER Libs/mimalloc)
-set_target_properties(mimalloc-static PROPERTIES FOLDER Libs/mimalloc)
-set_target_properties(mimalloc-obj PROPERTIES FOLDER Libs/mimalloc)
-set_target_properties(mimalloc-test-api PROPERTIES FOLDER Libs/mimalloc)
-set_target_properties(mimalloc-test-stress PROPERTIES FOLDER Libs/mimalloc)
+set(MIMALLOC_LIB Libraries/mimalloc)
+add_subdirectory(${MIMALLOC_LIB})
+set_target_properties(mimalloc PROPERTIES FOLDER ${MIMALLOC_LIB})
+set_target_properties(mimalloc-static PROPERTIES FOLDER ${MIMALLOC_LIB})
+set_target_properties(mimalloc-obj PROPERTIES FOLDER ${MIMALLOC_LIB})
+set_target_properties(mimalloc-test-api PROPERTIES FOLDER ${MIMALLOC_LIB})
+set_target_properties(mimalloc-test-stress PROPERTIES FOLDER ${MIMALLOC_LIB})
 
 
 if (TARGET_WINDOWS)
