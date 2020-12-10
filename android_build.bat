@@ -22,12 +22,16 @@ pause
 cd build_android
 mkdir libs\%C_ANDROID_ABI%
 copy libMemoryPoolTest.so libs\\%C_ANDROID_ABI%
-copy ..\Config\AndroidManifest.xml AndroidManifest.xml
-copy ..\Config\build.xml build.xml
-copy ..\Config\project.properties project.properties
-
+copy ..\Config\gradle.properties gradle.properties
+copy ..\AndroidManifest.xml AndroidManifest.xml
+copy ..\build.gradle build.gradle
+cd ..
 pause
 
-ant debug -Dout.final.file=..\MemoryPoolTest.apk
+cd Config
+rem fix build error
+set ANDROID_NDK=""
+set ANDROID_NDK_HOME=""
+call gradlew.bat -p ../build_android build
 cd ..
 pause
