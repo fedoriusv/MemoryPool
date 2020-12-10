@@ -7,6 +7,7 @@
 #include <chrono>
 #include <type_traits>
 #include <functional>
+#include <thread>
 
 #ifdef WIN32
 #include <windows.h>
@@ -22,7 +23,7 @@
 #endif //__ANDROID__
 
 
-#include "Libs/mimalloc/include/mimalloc.h"
+#include "Libraries/mimalloc/include/mimalloc.h"
 
 #if DEBUG
 #   define TEST(x) assert(x)
@@ -108,7 +109,7 @@ struct MemoryTestCallbacks
 
 bool Test_0()
 {
-    std::cout << "----------------Test_0 (Small Allocation. Base)-----------------" << std::endl;
+    std::cout << "-----------------Test_0 (Small Allocation. Base)" << std::endl;
 
     mem::MemoryPool pool(g_pageSize, &g_allocator);
 
@@ -183,13 +184,13 @@ bool Test_0()
     std::cout << "After Destroy All" << std::endl;
     pool.collectStatistic();
 
-    std::cout << "----------------Test_0 END-----------------" << std::endl;
+    std::cout << "-----------------Test_0 END" << std::endl;
     return true;
 }
 
 bool Test_1()
 {
-    std::cout << "-----------------Test_1 (Small Allocation. Compare)-----------------" << std::endl;
+    std::cout << "-----------------Test_1 (Small Allocation. Compare)" << std::endl;
 
     //create seq 32k allcation increase size, after that randomly delete it
     std::vector<std::pair<void* volatile, size_t>> mem(32'768);
@@ -233,7 +234,7 @@ bool Test_1()
 
     //Memory Pool
     {
-        mem::MemoryPool pool(g_pageSize, &g_allocator);
+        mem::MemoryPool pool(g_pageSize, &g_allocator, false);
         pool.preAllocatePools();
         pool.collectStatistic();
 
@@ -278,13 +279,13 @@ bool Test_1()
         std::cout << "MImalloc: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
     }
 
-    std::cout << "----------------Test_1 END-----------------" << std::endl;
+    std::cout << "----------------Test_1 END" << std::endl;
     return true;
 }
 
 bool Test_2()
 {
-    std::cout << "----------------Test_2 (Small Allocation. 2 alloc many times)-----------------" << std::endl;
+    std::cout << "----------------Test_2 (Small Allocation. 2 alloc many times)" << std::endl;
 
     const size_t countIter = 10'000'00;
 
@@ -360,13 +361,13 @@ bool Test_2()
         std::cout << "MImalloc: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
     }
 
-    std::cout << "----------------Test_2 END-----------------" << std::endl;
+    std::cout << "----------------Test_2 END" << std::endl;
     return true;
 }
 
 bool Test_3()
 {
-    std::cout << "----------------Test_3 (Small Allocation. Check content)-----------------" << std::endl;
+    std::cout << "----------------Test_3 (Small Allocation. Check content)" << std::endl;
 
     mem::MemoryPool pool(g_pageSize, &g_allocator);
 
@@ -512,13 +513,13 @@ bool Test_3()
     std::cout << "After Destroy All" << std::endl;
     pool.collectStatistic();
 
-    std::cout << "----------------Test_3 END-----------------" << std::endl;
+    std::cout << "----------------Test_3 END" << std::endl;
     return true;
 }
 
 bool Test_4()
 {
-    std::cout << "----------------Test_4 (Medium allocation. Content test)-----------------" << std::endl;
+    std::cout << "----------------Test_4 (Medium allocation. Content test)" << std::endl;
 
     mem::MemoryPool pool(g_pageSize, &g_allocator);
 
@@ -556,7 +557,7 @@ bool Test_4()
     }
     pool.collectStatistic();
 
-    std::cout << "----------------Test_4 END-----------------" << std::endl;
+    std::cout << "----------------Test_4 END" << std::endl;
     return true;
 }
 
@@ -564,11 +565,9 @@ bool Test_4()
 
 bool Test_5()
 {
-    std::cout << "----------------Test_5 (Medium allocation. Compare)-----------------" << std::endl;
+    std::cout << "----------------Test_5 (Medium allocation. Compare)" << std::endl;
 
     //create 32k-64k rendom allcation increase size, after that randomly delete it
-    mem::MemoryPool pool(g_pageSize, &g_allocator);
-
     const size_t minMallocSize = 32'769;
     const size_t maxMallocSize = g_pageSize;  //64 KB
 
@@ -627,6 +626,8 @@ bool Test_5()
 
     //Pool
     {
+        mem::MemoryPool pool(g_pageSize, &g_allocator, false);
+
         MemoryTestCallbacks callbacks;
         callbacks.allocate = [&pool](size_t size, size_t aligment) -> void* volatile { return pool.allocMemory(size, (mem::u32)aligment); };
         callbacks.deallocate = [&pool](void* ptr) -> void { pool.freeMemory(ptr); };
@@ -668,13 +669,13 @@ bool Test_5()
         std::cout << "MImalloc: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
     }
 
-    std::cout << "----------------Test_5 END-----------------" << std::endl;
+    std::cout << "----------------Test_5 END" << std::endl;
     return true;
 }
 
 bool Test_6()
 {
-    std::cout << "----------------Test_6 (Medium allocation. Compare Random Alloc/Dealloc memory)-----------------" << std::endl;
+    std::cout << "----------------Test_6 (Medium allocation. Compare Random Alloc/Dealloc memory)" << std::endl;
 
     const size_t minMallocSize = 32'736;
     const size_t maxMallocSize = g_pageSize;
@@ -817,7 +818,7 @@ bool Test_6()
 
     //pool
     {
-        mem::MemoryPool pool(g_pageSize, &g_allocator);
+        mem::MemoryPool pool(g_pageSize, &g_allocator, false);
 
         MemoryTestCallbacks callbacks;
         callbacks.allocate = [&pool](size_t size, size_t aligment) -> void* volatile { return pool.allocMemory(size, (mem::u32)aligment); };
@@ -860,18 +861,18 @@ bool Test_6()
         std::cout << "MImalloc: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
     }
 
-    std::cout << "----------------Test_6 END-----------------" << std::endl;
+    std::cout << "----------------Test_6 END" << std::endl;
     return true;
 }
 
 bool Test_7()
 {
-    std::cout << "----------------Test_7 (Large allocation)-----------------" << std::endl;
+    std::cout << "----------------Test_7 (Large allocation)" << std::endl;
 
     const size_t minMallocSize = g_pageSize;
-    const size_t maxMallocSize = 1024 * 1024 * 256;  //256 MB
+    const size_t maxMallocSize = 1024 * 1024 * 128; //128 MB
 
-    const size_t countTest = 20;
+    const size_t countTest = 10;
 
     mem::u64 allocateTime = 0;
     mem::u64 deallocateTime = 0;
@@ -958,14 +959,14 @@ bool Test_7()
         std::cout << "MImalloc: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
     }
 
-    std::cout << "----------------Test_7 END-----------------" << std::endl;
+    std::cout << "----------------Test_7 END" << std::endl;
     return true;
 }
 
 
 bool Test_8()
 {
-    std::cout << "----------------Test_8 (Combine allocation)-----------------" << std::endl;
+    std::cout << "----------------Test_8 (Combine allocation)" << std::endl;
 
     mem::u64 allocateTime = 0;
     mem::u64 deallocateTime = 0;
@@ -1035,17 +1036,17 @@ bool Test_8()
 
     std::cout << "STD malloc: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
 
-    std::cout << "----------------Test_8 END-----------------" << std::endl;
+    std::cout << "----------------Test_8 END" << std::endl;
     return true;
 }
 
 bool Test_9()
 {
-    std::cout << "----------------Test_9 (Large Allocation. 2 alloc many times)-----------------" << std::endl;
+    std::cout << "----------------Test_9 (Large Allocation. 2 alloc many times)" << std::endl;
 
-    const size_t countIter = 100;
+    const size_t countIter = 60;
 
-    const size_t maxMallocSize = 1024 * 1024 * 512;
+    const size_t maxMallocSize = 1024 * 1024 * 256;
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> dis(g_pageSize, maxMallocSize);
@@ -1126,7 +1127,7 @@ bool Test_9()
         std::cout << "MImalloc: (ms)" << (double)allocateTime / 1000.0 << " / " << (double)deallocateTime / 1000.0 << std::endl;
     }
 
-    std::cout << "----------------Test_2 END-----------------" << std::endl;
+    std::cout << "----------------Test_9 END" << std::endl;
     return true;
 }
 
@@ -1159,20 +1160,22 @@ int main()
     //TEST(Test_8());
     TEST(Test_9());
 
+    std::cout << "TEST END : " << std::endl;
     return 0;
 }
 
 #ifdef __ANDROID__
 void handle_cmd(android_app* app, int32_t cmd) 
 {
+    __android_log_print(ANDROID_LOG_DEBUG, "MemoryPool Test", "handle_cmd");
     switch (cmd) 
     {
     case APP_CMD_INIT_WINDOW:
         if (app->window != NULL) 
         {
-            std::cout << "Start main" << std::endl;
+            __android_log_print(ANDROID_LOG_DEBUG, "MemoryPool Test", "Start Main");
             main();
-            std::cout << "End main" << std::endl;
+            __android_log_print(ANDROID_LOG_DEBUG, "MemoryPool Test", "End Main");
         }
         break;
     }
